@@ -1,1 +1,1 @@
-# ICL
+# ICL: Infrastructure Configuration Language
