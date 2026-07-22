@@ -1,10 +1,6 @@
 package lexer
 
-import (
-	"fmt"
-	"os"
-	"unicode/utf8"
-)
+import "unicode/utf8"
 
 func (s *Scanner) match(expected rune) bool {
 	if s.isAtEnd() || s.peek() != expected {
@@ -42,9 +38,4 @@ func (s *Scanner) peekNext() rune {
 
 func (s *Scanner) isAtEnd() bool {
 	return s.current >= len(s.source)
-}
-
-// TODO: replace later with structured lexer errors.
-func reportError(line, where int, message string) {
-	fmt.Fprintf(os.Stderr, "[line %d] Error%d: %s\n", line, where, message)
 }

@@ -1,3 +1,5 @@
 package lexer
 
-var keywords = map[string]TokenType{}
+var keywords = map[string]TokenType{
+  "provider": PROVIDER,
+}

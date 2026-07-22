@@ -1,5 +1,11 @@
 package lexer
 
+import (
+	"strconv"
+
+	"github.com/aliamerj/icl/diagnostics"
+)
+
 func (s *Scanner) scanToken() {
 	switch ch := s.next(); ch {
 	case '(':
@@ -49,7 +55,7 @@ func (s *Scanner) scanToken() {
 		case isAlpha(ch):
 			s.identifier()
 		default:
-			reportError(s.line, s.current, "unexpected character")
+			s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.UNEXPECTED_CHAR, "unexpected character "+strconv.Quote(s.source[s.start:s.current]), "remove it or replace it with a valid token")
 		}
 	}
 }

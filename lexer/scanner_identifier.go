@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/aliamerj/icl/diagnostics"
 )
 
 func (s *Scanner) identifier() {
@@ -30,7 +32,7 @@ func (s *Scanner) string() {
 			return
 		case '\\':
 			if s.isAtEnd() {
-				reportError(s.line, s.current, "unterminated string")
+				s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.UNTERMINATED_STRING_LITERAL, "unterminated string literal", "add a closing quote before the end of the string")
 				return
 			}
 			switch escaped := s.next(); escaped {
@@ -55,7 +57,7 @@ func (s *Scanner) string() {
 		}
 	}
 
-	reportError(s.line, s.current, "unterminated string")
+	s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.UNTERMINATED_STRING_LITERAL, "unterminated string literal", "add a closing quote before the end of the string")
 }
 
 func (s *Scanner) number() {
@@ -72,7 +74,7 @@ func (s *Scanner) number() {
 
 	value, err := strconv.ParseFloat(s.source[s.start:s.current], 64)
 	if err != nil {
-		reportError(s.line, s.current, err.Error())
+		s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.ERROR_NUMBER_LITERAL, err.Error(), "check that the number literal is valid")
 		return
 	}
 	s.addTokenLiteral(NUMBER, value)

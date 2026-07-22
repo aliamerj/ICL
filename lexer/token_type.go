@@ -30,7 +30,8 @@ const (
 	STRING
 	NUMBER
 
-	//TODO: Keywords
+	// Keywords
+	PROVIDER
 
 	EOF
 )
