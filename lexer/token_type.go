@@ -29,7 +29,8 @@ const (
 	// Literals.
 	IDENTIFIER
 	STRING
-	NUMBER
+	NUMBER_INT
+  NUMBER_FLOAT
 
 	// Keywords
 	PROVIDER

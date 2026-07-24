@@ -61,23 +61,37 @@ func (s *Scanner) string() {
 }
 
 func (s *Scanner) number() {
+	isFloat := false
 	for isDigit(s.peek()) {
 		s.next()
 	}
 
 	if s.peek() == '.' && isDigit(s.peekNext()) {
+		isFloat = true
 		s.next()
 		for isDigit(s.peek()) {
 			s.next()
 		}
 	}
 
-	value, err := strconv.ParseFloat(s.source[s.start:s.current], 64)
+	lexeme := s.source[s.start:s.current]
+
+	if isFloat {
+		f, err := strconv.ParseFloat(lexeme, 64)
+		if err != nil {
+			s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.ERROR_NUMBER_LITERAL, err.Error(), "invalid float literal")
+			return
+		}
+		s.addTokenLiteral(NUMBER_FLOAT, f)
+		return
+	}
+
+	i, err := strconv.ParseInt(lexeme, 10, 64)
 	if err != nil {
 		s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.ERROR_NUMBER_LITERAL, err.Error(), "check that the number literal is valid")
 		return
 	}
-	s.addTokenLiteral(NUMBER, value)
+	s.addTokenLiteral(NUMBER_INT, i)
 }
 
 func isAlphaNumeric(ch rune) bool {

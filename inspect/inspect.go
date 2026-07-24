@@ -12,10 +12,11 @@ import (
 	"github.com/aliamerj/icl/lexer"
 )
 
-type InspectOptions struct {
+type Options struct {
 	Filename   string
 	Color      bool
 	IncludeEOF bool
+	Reporter   *diagnostics.Reporter
 }
 
 type Inspection struct {
@@ -27,17 +28,21 @@ type Inspection struct {
 	DiagnosticOutput string
 }
 
-func Inspect(source string) Inspection {
-	return InspectWithOptions(source, InspectOptions{
+func New(source string) Inspection {
+	return NewWithOptions(source, Options{
 		Filename: "<icl-file>",
 		Color:    true,
 	})
 }
 
-func InspectWithOptions(source string, options InspectOptions) Inspection {
+func NewWithOptions(source string, options Options) Inspection {
 	filename := options.Filename
 	if filename == "" {
 		filename = "<icl>"
+	}
+	reporter := options.Reporter
+	if reporter == nil {
+		reporter = diagnostics.New(source)
 	}
 
 	start := time.Now()

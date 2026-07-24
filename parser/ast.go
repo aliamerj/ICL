@@ -87,3 +87,21 @@ type StringLiteral struct {
 
 func (s *StringLiteral) Range() Range    { return s.Rng }
 func (s *StringLiteral) expressionNode() {}
+
+// ---- IntLiteral: 123----
+type IntLiteral struct {
+	Value int64
+	Rng   Range
+}
+
+func (n *IntLiteral) Range() Range    { return n.Rng }
+func (n *IntLiteral) expressionNode() {}
+
+// ---- FloatLiteral: 14.13 ----
+type FloatLiteral struct {
+	Value float64
+	Rng   Range
+}
+
+func (n *FloatLiteral) Range() Range    { return n.Rng }
+func (n *FloatLiteral) expressionNode() {}

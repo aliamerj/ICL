@@ -19,6 +19,7 @@ func New(tokens []lexer.Token, reporter *diagnostics.Reporter) *Parser {
 
 func (p *Parser) ParseProgram() *Program {
 	prog := &Program{}
+	startTok := p.cur()
 
 	for p.cur().Type != lexer.EOF {
 		switch p.cur().Type {
@@ -39,6 +40,7 @@ func (p *Parser) ParseProgram() *Program {
 		}
 	}
 
+	prog.Rng = spanOf(startTok, p.cur()) // p.cur() is EOF here — gives you the full file span
 	return prog
 }
 
@@ -109,18 +111,49 @@ func (p *Parser) parseAttribute() *Attribute {
 	if _, ok := p.expect(lexer.EQUAL); !ok {
 		return nil
 	}
-	valTok, ok := p.expect(lexer.STRING)
-	if !ok {
+
+	value := p.parseExpression()
+	if value == nil {
 		return nil
 	}
 
 	return &Attribute{
-		Name: &Identifier{Name: keyTok.Lexeme, Rng: rangeOf(keyTok)},
-		Value: &StringLiteral{
-			Value: valTok.Literal.(string),
-			Rng:   rangeOf(valTok),
-		},
-		Rng: spanOf(keyTok, valTok),
+		Name:  &Identifier{Name: keyTok.Lexeme, Rng: rangeOf(keyTok)},
+		Value: value,
+		Rng:   Range{Start: rangeOf(keyTok).Start, End: value.Range().End},
+	}
+}
+
+// parseExpression parses a single value on the right-hand side of `=`.
+// Grows over time: literals now, identifiers/references/arrays/objects later.
+func (p *Parser) parseExpression() Expression {
+	switch p.cur().Type {
+	case lexer.STRING:
+		tok := p.advance()
+		return &StringLiteral{
+			Value: tok.Literal.(string),
+			Rng:   rangeOf(tok),
+		}
+	case lexer.NUMBER_INT:
+		tok := p.advance()
+		return &IntLiteral{
+			Value: tok.Literal.(int64),
+			Rng:   rangeOf(tok),
+		}
+	case lexer.NUMBER_FLOAT:
+		tok := p.advance()
+		return &FloatLiteral{
+			Value: tok.Literal.(float64),
+			Rng:   rangeOf(tok),
+		}
+	default:
+		p.reporter.ErrorAtOffsetWithCode(
+			p.cur().Offset,
+			diagnostics.UNEXPECTED_TOKEN,
+			fmt.Sprintf("expected a value, found %q", p.cur().Lexeme),
+			"expected a string, number, or other expression here",
+		)
+		return nil
 	}
 }
 

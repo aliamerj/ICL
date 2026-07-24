@@ -14,14 +14,18 @@ type Scanner struct {
 }
 
 func New(source string) *Scanner {
+	return NewWithoutReporter(source, diagnostics.New(source))
+}
+
+func NewWithoutReporter(source string,reporter *diagnostics.Reporter) *Scanner{
 	t := &Scanner{
 		source:   source,
 		tokens:   make([]Token, 0),
-		reporter: diagnostics.New(source),
+		reporter: reporter,
 		line:     1,
 	}
 	t.scanTokens()
-	return t
+  return t
 }
 
 func (s *Scanner) Diagnostics() []diagnostics.Diagnostic {
@@ -39,7 +43,8 @@ func (s *Scanner) scanTokens() {
 	}
 
 	s.tokens = append(s.tokens, Token{
-		Type: EOF,
-		Line: s.line,
+			Type:   EOF,
+		Line:   s.line,
+		Offset: s.current,
 	})
 }

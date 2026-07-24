@@ -212,3 +212,166 @@ func TestParseProvider_Ranges(t *testing.T) {
 		t.Error("attribute name offset wasn't set (still zero value)")
 	}
 }
+
+func TestParseAttribute_IntLiteral(t *testing.T) {
+	src := `provider aws {
+  someNumber = 5
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+
+	if attr.Name.Name != "someNumber" {
+		t.Errorf("attr.Name = %q, want someNumber", attr.Name.Name)
+	}
+
+	lit, ok := attr.Value.(*IntLiteral)
+	if !ok {
+		t.Fatalf("attr.Value type = %T, want *IntLiteral", attr.Value)
+	}
+	if lit.Value != 5 {
+		t.Errorf("lit.Value = %d, want 5", lit.Value)
+	}
+}
+
+func TestParseAttribute_FloatLiteral(t *testing.T) {
+	src := `provider aws {
+  someFloat = 12.6
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+
+	lit, ok := attr.Value.(*FloatLiteral)
+	if !ok {
+		t.Fatalf("attr.Value type = %T, want *FloatLiteral", attr.Value)
+	}
+	if lit.Value != 12.6 {
+		t.Errorf("lit.Value = %v, want 12.6", lit.Value)
+	}
+}
+
+func TestParseAttribute_MixedLiteralTypes(t *testing.T) {
+	// Confirms string/int/float can all coexist in the same block,
+	// each producing the correct concrete AST type.
+	src := `provider aws {
+  source     = "hashicorp/aws"
+  version    = "5.37.0"
+  someNumber = 5
+  someFloat  = 12.6
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	block := prog.Statements[0].(*Block)
+	if len(block.Body.Statements) != 4 {
+		t.Fatalf("expected 4 attributes, got %d", len(block.Body.Statements))
+	}
+
+	wantTypes := []struct {
+		name string
+		want any
+	}{
+		{"source", &StringLiteral{}},
+		{"version", &StringLiteral{}},
+		{"someNumber", &IntLiteral{}},
+		{"someFloat", &FloatLiteral{}},
+	}
+
+	for i, want := range wantTypes {
+		attr := block.Body.Statements[i].(*Attribute)
+		if attr.Name.Name != want.name {
+			t.Errorf("attribute %d: name = %q, want %q", i, attr.Name.Name, want.name)
+		}
+
+		gotType := attr.Value
+		switch want.want.(type) {
+		case *StringLiteral:
+			if _, ok := gotType.(*StringLiteral); !ok {
+				t.Errorf("attribute %d (%s): type = %T, want *StringLiteral", i, want.name, gotType)
+			}
+		case *IntLiteral:
+			if _, ok := gotType.(*IntLiteral); !ok {
+				t.Errorf("attribute %d (%s): type = %T, want *IntLiteral", i, want.name, gotType)
+			}
+		case *FloatLiteral:
+			if _, ok := gotType.(*FloatLiteral); !ok {
+				t.Errorf("attribute %d (%s): type = %T, want *FloatLiteral", i, want.name, gotType)
+			}
+		}
+	}
+}
+
+func TestParseAttribute_NegativeOrExponentNumbersNotYetSupported(t *testing.T) {
+	// Documents current behavior: parseExpression only knows STRING,
+	// NUMBER_INT, NUMBER_FLOAT. Anything else (like a leading '-')
+	// should fail cleanly with a diagnostic, not panic or silently
+	// produce a wrong value. Revisit this test once unary minus
+	// or exponents are added to the grammar.
+	src := `provider aws {
+  someNumber = -5
+}`
+	_, reporter := parse(t, src)
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error, since unary '-' isn't supported yet")
+	}
+}
+
+func TestParseAttribute_UnsupportedValueTokenReportsError(t *testing.T) {
+	src := `provider aws {
+  region = {
+}`
+	_, reporter := parse(t, src)
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for an unsupported value token")
+	}
+}
+
+func TestParseAttribute_IntLiteral_Range(t *testing.T) {
+	src := `provider aws {
+  port = 8080
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+	lit := attr.Value.(*IntLiteral)
+
+	if lit.Rng.Start.Offset == 0 {
+		t.Error("IntLiteral range offset wasn't set (still zero value)")
+	}
+	if attr.Rng.End != lit.Rng.End {
+		t.Errorf("Attribute.Rng.End = %+v, want it to match value's end %+v", attr.Rng.End, lit.Rng.End)
+	}
+}
+
+func TestParseProgram_RangeCoversWholeFile(t *testing.T) {
+	src := `provider aws {
+  region = "eu-west-1"
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	if prog.Rng.Start.Offset != 0 {
+		t.Errorf("Program.Rng.Start.Offset = %d, want 0", prog.Rng.Start.Offset)
+	}
+	if prog.Rng.End.Offset != len(src) {
+		t.Errorf("Program.Rng.End.Offset = %d, want %d", prog.Rng.End.Offset, len(src))
+	}
+}

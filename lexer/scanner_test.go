@@ -38,9 +38,12 @@ func TestScannerIdentifiers(t *testing.T) {
 
 func TestScannerNumbers(t *testing.T) {
 	assertTokens(t, "0 42 3.14 0.5 123.", []expectedToken{
-		{NUMBER, "0", float64(0), 1}, {NUMBER, "42", float64(42), 1},
-		{NUMBER, "3.14", float64(3.14), 1}, {NUMBER, "0.5", float64(0.5), 1},
-		{NUMBER, "123", float64(123), 1}, {DOT, ".", nil, 1}, {EOF, "", nil, 1},
+		{NUMBER_INT, "0", int64(0), 1},
+		{NUMBER_INT, "42", int64(42), 1},
+		{NUMBER_FLOAT, "3.14", float64(3.14), 1},
+		{NUMBER_FLOAT, "0.5", float64(0.5), 1},
+		{NUMBER_INT, "123", int64(123), 1}, {DOT, ".", nil, 1},
+		{EOF, "", nil, 1},
 	})
 }
 
@@ -61,15 +64,15 @@ func TestScannerMultilineStringUpdatesLine(t *testing.T) {
 func TestScannerWhitespaceCommentsAndLineNumbers(t *testing.T) {
 	assertTokens(t, "  // ignored\nfoo\t+\n  12 // also ignored\nbar", []expectedToken{
 		{IDENTIFIER, "foo", nil, 2}, {PLUS, "+", nil, 2},
-		{NUMBER, "12", float64(12), 3}, {IDENTIFIER, "bar", nil, 4}, {EOF, "", nil, 4},
+		{NUMBER_INT, "12", int64(12), 3}, {IDENTIFIER, "bar", nil, 4}, {EOF, "", nil, 4},
 	})
 }
 
 func TestScannerMixedSource(t *testing.T) {
 	assertTokens(t, `var_name = (12.5 >= 10) + "ok"; // comment`, []expectedToken{
 		{IDENTIFIER, "var_name", nil, 1}, {EQUAL, "=", nil, 1}, {LEFT_PAREN, "(", nil, 1},
-		{NUMBER, "12.5", float64(12.5), 1}, {GREATER_EQUAL, ">=", nil, 1},
-		{NUMBER, "10", float64(10), 1}, {RIGHT_PAREN, ")", nil, 1}, {PLUS, "+", nil, 1}, {STRING, `"ok"`, "ok", 1},
+		{NUMBER_FLOAT, "12.5", float64(12.5), 1}, {GREATER_EQUAL, ">=", nil, 1},
+		{NUMBER_INT, "10", int64(10), 1}, {RIGHT_PAREN, ")", nil, 1}, {PLUS, "+", nil, 1}, {STRING, `"ok"`, "ok", 1},
 		{SEMICOLON, ";", nil, 1}, {EOF, "", nil, 1},
 	})
 }
@@ -135,7 +138,7 @@ func TestScannerTokensReturnsACopy(t *testing.T) {
 	scanner := New("name")
 	tokens := scanner.Tokens()
 	tokens[0].Lexeme = "changed"
-	tokens[0].Type = NUMBER
+	tokens[0].Type = NUMBER_INT
 
 	original := scanner.Tokens()
 	if original[0].Lexeme != "name" || original[0].Type != IDENTIFIER {
@@ -152,5 +155,20 @@ func TestScannerKeywordsFromTable(t *testing.T) {
 		if tokens[0].Type != wantType || tokens[0].Lexeme != keyword {
 			t.Errorf("keyword %q: got %#v, want type=%v and lexeme=%q", keyword, tokens[0], wantType, keyword)
 		}
+	}
+}
+
+func TestScannerTokenOffsets(t *testing.T) {
+	source := `provider aws {}`
+	tokens := New(source).Tokens()
+
+	want := []int{0, 9, 13} // "provider", "aws", "{" - start offsets
+	for i, w := range want {
+		if tokens[i].Offset != w {
+			t.Errorf("token %d (%q): Offset = %d, want %d", i, tokens[i].Lexeme, tokens[i].Offset, w)
+		}
+	}
+	if tokens[len(tokens)-1].Offset != len(source) {
+		t.Errorf("EOF Offset = %d, want %d", tokens[len(tokens)-1].Offset, len(source))
 	}
 }
