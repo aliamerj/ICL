@@ -1,4 +1,5 @@
 package inspect
+
 // Testing only
 import (
 	"bytes"
@@ -39,10 +40,8 @@ func InspectWithOptions(source string, options InspectOptions) Inspection {
 		filename = "<icl>"
 	}
 
-	reporter := diagnostics.New(source)
-
 	start := time.Now()
-	scanner := lexer.NewScannerWithReporter(source, reporter)
+	scanner := lexer.New(source)
 	duration := time.Since(start)
 
 	tokens := scanner.Tokens()

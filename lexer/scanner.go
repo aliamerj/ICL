@@ -13,18 +13,11 @@ type Scanner struct {
 	line    int
 }
 
-func NewScanner(source string) *Scanner {
-	return NewScannerWithReporter(source, diagnostics.New(source))
-}
-
-func NewScannerWithReporter(source string, reporter *diagnostics.Reporter) *Scanner {
-	if reporter == nil {
-		reporter = diagnostics.New(source)
-	}
+func New(source string) *Scanner {
 	t := &Scanner{
 		source:   source,
-		tokens:   []Token{},
-		reporter: reporter,
+		tokens:   make([]Token, 0),
+		reporter: diagnostics.New(source),
 		line:     1,
 	}
 	t.scanTokens()

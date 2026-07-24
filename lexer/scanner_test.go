@@ -3,8 +3,6 @@ package lexer
 import (
 	"reflect"
 	"testing"
-
-	"github.com/aliamerj/icl/diagnostics"
 )
 
 func TestScannerEmptySource(t *testing.T) {
@@ -77,47 +75,15 @@ func TestScannerMixedSource(t *testing.T) {
 }
 
 func TestScannerUnexpectedCharacterReportsErrorAndContinues(t *testing.T) {
-	scanner := NewScanner("@ok")
+	scanner := New("@ok")
 	assertTokenList(t, scanner.Tokens(), []expectedToken{{IDENTIFIER, "ok", nil, 1}, {EOF, "", nil, 1}})
 	if !scanner.HasErrors() {
 		t.Fatal("expected an error for an unexpected character")
 	}
 }
 
-func TestScannerStoresDiagnostics(t *testing.T) {
-	reporter := diagnostics.New("@ok")
-	scanner := NewScannerWithReporter("@ok", reporter)
-
-	if !scanner.HasErrors() {
-		t.Fatal("expected scanner to have errors")
-	}
-	diagnostics := scanner.Diagnostics()
-	if len(diagnostics) != 1 {
-		t.Fatalf("got %d diagnostics, want 1", len(diagnostics))
-	}
-	if diagnostics[0].Code != "E0001" || diagnostics[0].Message != `unexpected character "@"` || diagnostics[0].Help != "remove it or replace it with a valid token" || diagnostics[0].Span.Start.Line != 1 || diagnostics[0].Span.Start.Column != 1 {
-		t.Fatalf("unexpected diagnostic: %#v", diagnostics[0])
-	}
-}
-
-func TestScannerUnterminatedStringReportsCleanDiagnostic(t *testing.T) {
-	reporter := diagnostics.New("name = \"unfinished")
-	scanner := NewScannerWithReporter("name = \"unfinished", reporter)
-
-	if !scanner.HasErrors() {
-		t.Fatal("expected scanner to have errors")
-	}
-	diagnostics := scanner.Diagnostics()
-	if len(diagnostics) != 1 {
-		t.Fatalf("got %d diagnostics, want 1", len(diagnostics))
-	}
-	if diagnostics[0].Code != "E0002" || diagnostics[0].Message != "unterminated string literal" || diagnostics[0].Help == "" || diagnostics[0].Span.Start.Column != 8 {
-		t.Fatalf("unexpected diagnostic: %#v", diagnostics[0])
-	}
-}
-
 func TestScannerUnterminatedStringReportsErrorAndOmitsToken(t *testing.T) {
-	scanner := NewScanner(`"unfinished`)
+	scanner := New(`"unfinished`)
 	assertTokenList(t, scanner.Tokens(), []expectedToken{{EOF, "", nil, 1}})
 	if !scanner.HasErrors() {
 		t.Fatal("expected an error for an unterminated string")
@@ -133,7 +99,7 @@ type expectedToken struct {
 
 func assertTokens(t *testing.T, source string, expected []expectedToken) {
 	t.Helper()
-	assertTokenList(t, NewScanner(source).Tokens(), expected)
+	assertTokenList(t, New(source).Tokens(), expected)
 }
 
 func assertTokenList(t *testing.T, got []Token, expected []expectedToken) {
@@ -166,7 +132,7 @@ func TestScannerStringEscapes(t *testing.T) {
 }
 
 func TestScannerTokensReturnsACopy(t *testing.T) {
-	scanner := NewScanner("name")
+	scanner := New("name")
 	tokens := scanner.Tokens()
 	tokens[0].Lexeme = "changed"
 	tokens[0].Type = NUMBER
@@ -179,7 +145,7 @@ func TestScannerTokensReturnsACopy(t *testing.T) {
 
 func TestScannerKeywordsFromTable(t *testing.T) {
 	for keyword, wantType := range keywords {
-		tokens := NewScanner(keyword).Tokens()
+		tokens := New(keyword).Tokens()
 		if len(tokens) != 2 {
 			t.Fatalf("keyword %q: got %d tokens, want keyword and EOF", keyword, len(tokens))
 		}

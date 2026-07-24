@@ -5,6 +5,7 @@ type Token struct {
 	Lexeme  string
 	Literal any
 	Line    int
+	Offset  int
 }
 
 func (s *Scanner) Tokens() []Token {
@@ -29,5 +30,6 @@ func (s *Scanner) addTokenLiteral(tokenType TokenType, literal any) {
 		Lexeme:  s.source[s.start:s.current],
 		Literal: literal,
 		Line:    s.line,
+		Offset:  s.start,
 	})
 }
