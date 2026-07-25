@@ -1,6 +1,10 @@
 provider aws {
-  source  = "hashicorp/aws"
+  source = "hashicorp/aws"
   version = "5.37.0"
-  region  = "eu-west-1"
-  }
+  region = "eu-west-1"
+}
 
+provider random {
+  source = "hashicorp/random"
+  version = "~> 3.0"
+}

@@ -18,6 +18,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runInspect(args[1:], stdout, stderr)
 	case "build":
 		return runBuild(args[1:], stdout, stderr)
+	case "fmt":
+		return runFmt(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "icl: unknown command %q\n\n", args[0])
 		return printUsage(stderr)
@@ -31,6 +33,7 @@ func printUsage(w io.Writer) int {
 commands:
   inspect <file.ic>          Parse and evaluate a file, print the resolved config
   build <file.ic> [-o path]  Compile a file to Terraform JSON (main.tf.json)
+  fmt  
   version                     Print the icl version`)
 	return 2
 }

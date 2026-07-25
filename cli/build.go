@@ -29,22 +29,66 @@ func runBuild(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: icl build <file.ic> [--output|-o <directory>]")
+		fmt.Fprintln(stderr, "usage: icl build <file.ic|directory> [--output|-o <directory>]")
 		return 2
 	}
 
 	path := fs.Arg(0)
 
-	if err := validateICFile(path); err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 2
+	outDir := *outDirLong
+	if outDir == "" {
+		outDir = *outDirShort
 	}
 
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	if !info.IsDir() {
+		if err := validateICFile(path); err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 2
+		}
+
+		return buildFile(path, outDir, stdout, stderr)
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: cannot read directory %s: %v\n", path, err)
+		return 1
+	}
+
+	exitCode := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if filepath.Ext(entry.Name()) != ".ic" {
+			continue
+		}
+
+		file := filepath.Join(path, entry.Name())
+
+		if code := buildFile(file, outDir, stdout, stderr); code != 0 {
+			exitCode = code
+		}
+	}
+
+	return exitCode
+}
+
+func buildFile(path, outDir string, stdout, stderr io.Writer) int {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: cannot read %s: %v\n", path, err)
 		return 1
 	}
+
 	sourceText := string(source)
 
 	configs, diags := pipeline.Run(sourceText)
@@ -57,11 +101,6 @@ func runBuild(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to build Terraform JSON: %v\n", err)
 		return 1
-	}
-
-	outDir := *outDirLong
-	if outDir == "" {
-		outDir = *outDirShort
 	}
 
 	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))

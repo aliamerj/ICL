@@ -22,8 +22,18 @@ type RequiredProvider struct {
 	Version string `json:"version,omitempty"`
 }
 
-// BuildDocument assembles the Terraform-JSON document from all resolved
-func BuildDocument(configs []eval.ProviderConfig) (*Document, error) {
+
+// Marshal produces the actual bytes to write as main.tf.json.
+func Marshal(configs eval.Config) ([]byte, error) {
+	doc, err := buildDocument(configs.Provider)
+	if err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(doc, "", "  ")
+}
+
+// buildDocument assembles the Terraform-JSON document from all resolved
+func buildDocument(configs []eval.ProviderConfig) (*Document, error) {
 	doc := &Document{
 		Terraform: &TerraformBlock{RequiredProviders: map[string]RequiredProvider{}},
 		Provider:  map[string]any{},
@@ -61,11 +71,3 @@ func BuildDocument(configs []eval.ProviderConfig) (*Document, error) {
 	return doc, nil
 }
 
-// Marshal produces the actual bytes to write as main.tf.json.
-func Marshal(configs eval.Config) ([]byte, error) {
-	doc, err := BuildDocument(configs.Provider)
-	if err != nil {
-		return nil, err
-	}
-	return json.MarshalIndent(doc, "", "  ")
-}
