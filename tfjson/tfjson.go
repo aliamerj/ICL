@@ -69,4 +69,3 @@ func Marshal(configs eval.Config) ([]byte, error) {
 	}
 	return json.MarshalIndent(doc, "", "  ")
 }
-

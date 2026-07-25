@@ -7,7 +7,7 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
-func evalIdentifier(id *parser.Identifier, env *environment, reporter *diagnostics.Reporter) *Value {
+func evalIdentifier(id *parser.Identifier, env *environment, reporter *diagnostics.Reporter) (Value, bool) {
 	v, ok := env.get(id.Name)
 	if !ok {
 		reporter.ErrorAtOffsetWithCode(
@@ -16,7 +16,7 @@ func evalIdentifier(id *parser.Identifier, env *environment, reporter *diagnosti
 			fmt.Sprintf("undefined reference %q", id.Name),
 			"",
 		)
-		return nil
+		return Value{}, false
 	}
-	return &v
+	return v, true
 }

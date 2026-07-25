@@ -1,6 +1,6 @@
 package eval
 
-// environment holds named values in scope — resources, data lookups,
+// environment holds named values in scope - resources, data lookups,
 // locals, inputs. Flat map today; parent-scope chaining is the natural
 // extension point once `for`/nested scopes exist, so the shape is
 // deliberately ready for that without a rewrite.
@@ -11,14 +11,14 @@ type environment struct {
 
 func newEnv() *environment {
 	return &environment{
-		values: make(map[string]Value, 0),
+		values: make(map[string]Value),
 	}
 }
 
 func (e *environment) child() *environment {
 	return &environment{
 		parent: e,
-		values: make(map[string]Value, 0),
+		values: make(map[string]Value),
 	}
 }
 

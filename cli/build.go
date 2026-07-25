@@ -45,14 +45,15 @@ func runBuild(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: cannot read %s: %v\n", path, err)
 		return 1
 	}
+	sourceText := string(source)
 
-	configs, diags := pipeline.Run(string(source))
+	configs, diags := pipeline.Run(sourceText)
 	if len(diags) > 0 {
-		printDiagnostics(diags, string(source), path, stderr)
+		printDiagnostics(diags, sourceText, path, stderr)
 		return 1
 	}
 
-	out, err := tfjson.Marshal(*configs)
+	out, err := tfjson.Marshal(configs)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to build Terraform JSON: %v\n", err)
 		return 1

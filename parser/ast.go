@@ -37,8 +37,8 @@ type Identifier struct {
 	Rng  rangePos
 }
 
-func (i *Identifier) Range() rangePos    { return i.Rng }
-func (i *Identifier) expressionNode() {}
+func (i Identifier) Range() rangePos { return i.Rng }
+func (i Identifier) expressionNode() {}
 
 // ---- Attribute: one `key = value` line ----
 
@@ -48,8 +48,8 @@ type Attribute struct {
 	Rng   rangePos
 }
 
-func (a *Attribute) Range() rangePos   { return a.Rng }
-func (a *Attribute) statementNode() {}
+func (a Attribute) Range() rangePos { return a.Rng }
+func (a Attribute) statementNode() {}
 
 // Block: the ONE shape for provider, resource, lookup, input, output, module, and nested blocks like filter/route
 
@@ -61,8 +61,8 @@ type Block struct {
 	Rng     rangePos
 }
 
-func (b *Block) Range() rangePos   { return b.Rng }
-func (b *Block) statementNode() {}
+func (b Block) Range() rangePos { return b.Rng }
+func (b Block) statementNode() {}
 
 // ---- Body: ordered statements inside { } — order matters for the formatter ----
 
@@ -71,7 +71,7 @@ type Body struct {
 	Rng        rangePos
 }
 
-func (b *Body) Range() rangePos { return b.Rng }
+func (b Body) Range() rangePos { return b.Rng }
 
 // ---- Program: the file root ----
 
@@ -80,7 +80,7 @@ type Program struct {
 	Rng        rangePos
 }
 
-func (p *Program) Range() rangePos { return p.Rng }
+func (p Program) Range() rangePos { return p.Rng }
 
 // ---- StringLiteral: "eu-west-1", "hashicorp/aws" ----
 
@@ -89,8 +89,8 @@ type StringLiteral struct {
 	Rng   rangePos
 }
 
-func (s *StringLiteral) Range() rangePos    { return s.Rng }
-func (s *StringLiteral) expressionNode() {}
+func (s StringLiteral) Range() rangePos { return s.Rng }
+func (s StringLiteral) expressionNode() {}
 
 // ---- IntLiteral: 123----
 type IntLiteral struct {
@@ -98,8 +98,8 @@ type IntLiteral struct {
 	Rng   rangePos
 }
 
-func (n *IntLiteral) Range() rangePos    { return n.Rng }
-func (n *IntLiteral) expressionNode() {}
+func (n IntLiteral) Range() rangePos { return n.Rng }
+func (n IntLiteral) expressionNode() {}
 
 // ---- FloatLiteral: 14.13 ----
 type FloatLiteral struct {
@@ -107,8 +107,8 @@ type FloatLiteral struct {
 	Rng   rangePos
 }
 
-func (n *FloatLiteral) Range() rangePos    { return n.Rng }
-func (n *FloatLiteral) expressionNode() {}
+func (n FloatLiteral) Range() rangePos { return n.Rng }
+func (n FloatLiteral) expressionNode() {}
 
 // ---- BoolLiteral:  TRUE or FALSE ----
 
@@ -117,8 +117,8 @@ type BoolLiteral struct {
 	Rng   rangePos
 }
 
-func (b *BoolLiteral) Range() rangePos    { return b.Rng }
-func (b *BoolLiteral) expressionNode() {}
+func (b BoolLiteral) Range() rangePos { return b.Rng }
+func (b BoolLiteral) expressionNode() {}
 
 type BinaryExpr struct {
 	Left     Expression
@@ -127,5 +127,5 @@ type BinaryExpr struct {
 	Rng      rangePos
 }
 
-func (b *BinaryExpr) Range() rangePos    { return b.Rng }
-func (b *BinaryExpr) expressionNode() {}
+func (b BinaryExpr) Range() rangePos { return b.Rng }
+func (b BinaryExpr) expressionNode() {}

@@ -547,3 +547,18 @@ func timeoutChan() <-chan struct{} {
 	}()
 	return ch
 }
+
+
+func TestParsePrimary_MalformedLiteralDoesNotPanic(t *testing.T) {
+	tokens := []lexer.Token{{Type: tokens.STRING, Lexeme: "\"broken\"", Literal: 123, Line: 1, Offset: 0}, {Type: tokens.EOF, Line: 1, Offset: 9}}
+	reporter := diagnostics.New("")
+	p := New(tokens, reporter)
+	prog := p.ParseProgram()
+
+	if prog == nil {
+		t.Fatal("expected a program, got nil")
+	}
+	if !reporter.HasErrors() {
+		t.Fatal("expected malformed literal to report an error")
+	}
+}

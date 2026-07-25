@@ -48,11 +48,11 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: cannot read %s: %v\n", path, err)
 		return 1
 	}
-	strSource := string(source)
+	sourceText := string(source)
 
-	configs, diags := pipeline.Run(strSource)
+	configs, diags := pipeline.Run(sourceText)
 	if len(diags) > 0 {
-		printDiagnostics(diags, strSource, path, stderr)
+		printDiagnostics(diags, sourceText, path, stderr)
 		return 1
 	}
 

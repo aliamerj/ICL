@@ -27,19 +27,19 @@ type Value struct {
 }
 
 // Eval is the single entry point for evaluating any expression node.
-// New expression kinds (BinaryExpr, UnaryExpr, references, if/for later)
-// are added as new cases here — this function is the whole extension
-// point; nothing above it should ever need to change.
-func eval(expr parser.Expression, env *environment, reporter *diagnostics.Reporter) *Value {
+// It returns the computed value plus a success flag. Errors are reported
+// through the diagnostic reporter; the boolean keeps control flow explicit
+// without heap-allocating wrapper pointers.
+func eval(expr parser.Expression, env *environment, reporter *diagnostics.Reporter) (Value, bool) {
 	switch e := expr.(type) {
 	case *parser.StringLiteral:
-		return StringValue(e.Value)
+		return StringValue(e.Value), true
 	case *parser.IntLiteral:
-		return IntValue(e.Value)
+		return IntValue(e.Value), true
 	case *parser.FloatLiteral:
-		return FloatValue(e.Value)
+		return FloatValue(e.Value), true
 	case *parser.BoolLiteral:
-		return BoolValue(e.Value)
+		return BoolValue(e.Value), true
 	case *parser.Identifier:
 		return evalIdentifier(e, env, reporter)
 	case *parser.BinaryExpr:
@@ -51,7 +51,7 @@ func eval(expr parser.Expression, env *environment, reporter *diagnostics.Report
 			fmt.Sprintf("cannot evaluate expression of type %T yet", expr),
 			"",
 		)
-		return nil
+		return Value{}, false
 	}
 }
 
@@ -72,8 +72,8 @@ func (v Value) Native() any {
 	}
 }
 
-func StringValue(s string) *Value { return &Value{Kind: KindString, Str: s} }
-func IntValue(i int64) *Value     { return &Value{Kind: KindInt, Int: i} }
-func FloatValue(f float64) *Value { return &Value{Kind: KindFloat, Float: f} }
-func BoolValue(b bool) *Value     { return &Value{Kind: KindBool, Bool: b} }
-func NullValue() *Value           { return &Value{Kind: KindNull} }
+func StringValue(s string) Value { return Value{Kind: KindString, Str: s} }
+func IntValue(i int64) Value     { return Value{Kind: KindInt, Int: i} }
+func FloatValue(f float64) Value  { return Value{Kind: KindFloat, Float: f} }
+func BoolValue(b bool) Value      { return Value{Kind: KindBool, Bool: b} }
+func NullValue() Value            { return Value{Kind: KindNull} }

@@ -8,11 +8,11 @@ import (
 )
 
 // ProviderConfig is the resolved, typed result of evaluating a
-// `provider` block. This is intentionally NOT ast.Block — the AST
+// `provider` block. This is intentionally NOT ast.Block -- the AST
 // is syntax, this is meaning. Keeping them separate means the AST
 // never has to know what a "valid provider" looks like.
 type ProviderConfig struct {
-	Name    string // e.g. "aws" — from the block's label
+	Name    string // e.g. "aws" - from the block's label
 	Source  string
 	Version string
 	Extra   map[string]Value // anything else the user set, kept for forward-compat
@@ -40,8 +40,8 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 			continue
 		}
 
-		val := eval(attr.Value, env, reporter)
-		if val == nil {
+		val, ok := eval(attr.Value, env, reporter)
+		if !ok {
 			continue
 		}
 
@@ -69,7 +69,7 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 			}
 			cfg.Version = val.Str
 		default:
-			cfg.Extra[attr.Name.Name] = *val
+			cfg.Extra[attr.Name.Name] = val
 		}
 	}
 

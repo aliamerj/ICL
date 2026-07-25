@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aliamerj/icl/diagnostics"
+	"github.com/aliamerj/icl/lexer"
 	"github.com/aliamerj/icl/tokens"
 )
 
@@ -11,42 +12,36 @@ func (p *parser) parsePrimary() Expression {
 	switch p.cur().Type {
 	case tokens.STRING:
 		tok := p.advance()
-		return &StringLiteral{
-			Value: tok.Literal.(string),
-			Rng:   rangeOf(tok),
+		value, ok := tokenLiteral[string](p.reporter, tok, "string")
+		if !ok {
+			return nil
 		}
+		return &StringLiteral{Value: value, Rng: rangeOf(tok)}
 
 	case tokens.NUMBER_INT:
 		tok := p.advance()
-		return &IntLiteral{
-			Value: tok.Literal.(int64),
-			Rng:   rangeOf(tok),
+		value, ok := tokenLiteral[int64](p.reporter, tok, "integer")
+		if !ok {
+			return nil
 		}
+		return &IntLiteral{Value: value, Rng: rangeOf(tok)}
 
 	case tokens.NUMBER_FLOAT:
 		tok := p.advance()
-		return &FloatLiteral{
-			Value: tok.Literal.(float64),
-			Rng:   rangeOf(tok),
+		value, ok := tokenLiteral[float64](p.reporter, tok, "float")
+		if !ok {
+			return nil
 		}
+		return &FloatLiteral{Value: value, Rng: rangeOf(tok)}
 	case tokens.TRUE:
 		tok := p.advance()
-		return &BoolLiteral{
-			Value: true,
-			Rng:   rangeOf(tok),
-		}
+		return &BoolLiteral{Value: true, Rng: rangeOf(tok)}
 	case tokens.FALSE:
 		tok := p.advance()
-		return &BoolLiteral{
-			Value: false,
-			Rng:   rangeOf(tok),
-		}
+		return &BoolLiteral{Value: false, Rng: rangeOf(tok)}
 	case tokens.IDENTIFIER:
 		tok := p.advance()
-		return &Identifier{
-			Name: tok.Lexeme,
-			Rng:  rangeOf(tok),
-		}
+		return &Identifier{Name: tok.Lexeme, Rng: rangeOf(tok)}
 	case tokens.LEFT_PAREN:
 		p.advance()
 		expr := p.parseExpression()
@@ -154,4 +149,21 @@ func (p *parser) parseFactor() Expression {
 			return expr
 		}
 	}
+}
+
+
+func tokenLiteral[T any](reporter *diagnostics.Reporter, tok lexer.Token, kind string) (T, bool) {
+	value, ok := tok.Literal.(T)
+	if ok {
+		return value, true
+	}
+
+	var zero T
+	reporter.ErrorAtOffsetWithCode(
+		tok.Offset,
+		diagnostics.UNEXPECTED_TOKEN,
+		fmt.Sprintf("malformed %s literal %q", kind, tok.Lexeme),
+		"rebuild the scanner output or report this bug",
+	)
+	return zero, false
 }

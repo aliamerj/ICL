@@ -19,7 +19,7 @@ type scanner struct {
 func New(source string, reporter *diagnostics.Reporter) *scanner {
 	t := &scanner{
 		source:   source,
-		tokens:   make([]Token, 0),
+		tokens:   make([]Token, 0, len(source)/2+1),
 		reporter: reporter,
 		line:     1,
 	}

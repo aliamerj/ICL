@@ -15,7 +15,7 @@ func TestBuildDocument_SingleProvider(t *testing.T) {
 			Source:  "hashicorp/aws",
 			Version: "5.37.0",
 			Extra: map[string]eval.Value{
-				"region": *eval.StringValue("eu-west-1"),
+				"region": eval.StringValue("eu-west-1"),
 			},
 		},
 	}
@@ -98,8 +98,8 @@ func TestMarshal_ProducesValidJSON(t *testing.T) {
 			Source:  "hashicorp/aws",
 			Version: "5.37.0",
 			Extra: map[string]eval.Value{
-				"region":     *eval.StringValue("eu-west-1"),
-				"maxRetries": *eval.IntValue(3),
+				"region":     eval.StringValue("eu-west-1"),
+				"maxRetries": eval.IntValue(3),
 			},
 		},
 	}

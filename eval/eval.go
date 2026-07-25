@@ -10,8 +10,8 @@ type Config struct {
 	Provider []ProviderConfig
 }
 
-func Run(prog *parser.Program, reporter *diagnostics.Reporter) *Config {
-	configs := &Config{}
+func Run(prog *parser.Program, reporter *diagnostics.Reporter) Config {
+	configs := Config{}
 	env := newEnv()
 
 	for _, stmt := range prog.Statements {
