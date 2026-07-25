@@ -5,25 +5,26 @@ import (
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/lexer"
+	"github.com/aliamerj/icl/tokens"
 )
 
-type Parser struct {
+type parser struct {
 	tokens   []lexer.Token
 	pos      int
 	reporter *diagnostics.Reporter
 }
 
-func New(tokens []lexer.Token, reporter *diagnostics.Reporter) *Parser {
-	return &Parser{tokens: tokens, reporter: reporter}
+func New(tokens []lexer.Token, reporter *diagnostics.Reporter) *parser {
+	return &parser{tokens: tokens, reporter: reporter}
 }
 
-func (p *Parser) ParseProgram() *Program {
+func (p *parser) ParseProgram() *Program {
 	prog := &Program{}
 	startTok := p.cur()
 
-	for p.cur().Type != lexer.EOF {
+	for p.cur().Type != tokens.EOF {
 		switch p.cur().Type {
-		case lexer.PROVIDER:
+		case tokens.PROVIDER:
 			if block := p.parseProviderBlock(); block != nil {
 				prog.Statements = append(prog.Statements, block)
 			} else {
@@ -44,16 +45,16 @@ func (p *Parser) ParseProgram() *Program {
 	return prog
 }
 
-func (p *Parser) synchronize() {
+func (p *parser) synchronize() {
 	p.advance()
 
-	for p.cur().Type != lexer.EOF {
-		if p.cur().Type == lexer.RIGHT_BRACE {
+	for p.cur().Type != tokens.EOF {
+		if p.cur().Type == tokens.RIGHT_BRACE {
 			p.advance()
 			return
 		}
 		switch p.cur().Type {
-		case lexer.PROVIDER:
+		case tokens.PROVIDER:
 			return
 		}
 		p.advance()

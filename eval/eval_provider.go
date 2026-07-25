@@ -18,7 +18,7 @@ type ProviderConfig struct {
 	Extra   map[string]Value // anything else the user set, kept for forward-compat
 }
 
-func EvalProvider(block *parser.Block, env *Environment, reporter *diagnostics.Reporter) *ProviderConfig {
+func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.Reporter) *ProviderConfig {
 	if len(block.Labels) != 1 {
 		reporter.ErrorAtOffsetWithCode(
 			block.Rng.Start.Offset,
@@ -40,7 +40,7 @@ func EvalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 			continue
 		}
 
-		val := Eval(attr.Value, env, reporter) // <-- was evalExpression, now the shared dispatcher
+		val := eval(attr.Value, env, reporter)
 		if val == nil {
 			continue
 		}
@@ -83,23 +83,4 @@ func EvalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 	}
 
 	return cfg
-}
-
-func evalExpression(expr parser.Expression, reporter *diagnostics.Reporter) *Value {
-	switch e := expr.(type) {
-	case *parser.StringLiteral:
-		return &Value{Kind: KindString, Str: e.Value}
-	case *parser.IntLiteral:
-		return &Value{Kind: KindInt, Int: e.Value}
-	case *parser.FloatLiteral:
-		return &Value{Kind: KindFloat, Float: e.Value}
-	default:
-		reporter.ErrorAtOffsetWithCode(
-			expr.Range().Start.Offset,
-			diagnostics.UNSUPPORTED_EXPRESSION,
-			fmt.Sprintf("cannot evaluate expression of type %T yet", expr),
-			"",
-		)
-		return nil
-	}
 }

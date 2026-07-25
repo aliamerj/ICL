@@ -1,5 +1,7 @@
 package lexer
 
-var keywords = map[string]TokenType{
-	"provider": PROVIDER,
+import "github.com/aliamerj/icl/tokens"
+
+var keywords = map[string]tokens.Type{
+	"provider": tokens.PROVIDER,
 }

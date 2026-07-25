@@ -4,36 +4,37 @@ import (
 	"strconv"
 
 	"github.com/aliamerj/icl/diagnostics"
+	"github.com/aliamerj/icl/tokens"
 )
 
-func (s *Scanner) scanToken() {
+func (s *scanner) scanToken() {
 	switch ch := s.next(); ch {
 	case '(':
-		s.addToken(LEFT_PAREN)
+		s.addToken(tokens.LEFT_PAREN)
 	case ')':
-		s.addToken(RIGHT_PAREN)
+		s.addToken(tokens.RIGHT_PAREN)
 	case '{':
-		s.addToken(LEFT_BRACE)
+		s.addToken(tokens.LEFT_BRACE)
 	case '}':
-		s.addToken(RIGHT_BRACE)
+		s.addToken(tokens.RIGHT_BRACE)
 	case '.':
-		s.addToken(DOT)
+		s.addToken(tokens.DOT)
 	case '-':
-		s.addToken(MINUS)
+		s.addToken(tokens.MINUS)
 	case '+':
-		s.addToken(PLUS)
+		s.addToken(tokens.PLUS)
 	case ';':
-		s.addToken(SEMICOLON)
+		s.addToken(tokens.SEMICOLON)
 	case '*':
-		s.addToken(STAR)
+		s.addToken(tokens.STAR)
 	case '!':
-		s.addConditionalToken('=', BANG_EQUAL, BANG)
+		s.addConditionalToken('=', tokens.BANG_EQUAL, tokens.BANG)
 	case '=':
-		s.addConditionalToken('=', EQUAL_EQUAL, EQUAL)
+		s.addConditionalToken('=', tokens.EQUAL_EQUAL, tokens.EQUAL)
 	case '<':
-		s.addConditionalToken('=', LESS_EQUAL, LESS)
+		s.addConditionalToken('=', tokens.LESS_EQUAL, tokens.LESS)
 	case '>':
-		s.addConditionalToken('=', GREATER_EQUAL, GREATER)
+		s.addConditionalToken('=', tokens.GREATER_EQUAL, tokens.GREATER)
 	case '/':
 		if s.match('/') {
 			for s.peek() != '\n' && !s.isAtEnd() {
@@ -41,7 +42,7 @@ func (s *Scanner) scanToken() {
 			}
 			return
 		}
-		s.addToken(SLASH)
+		s.addToken(tokens.SLASH)
 	case ' ', '\r', '\t':
 		return
 	case '\n':

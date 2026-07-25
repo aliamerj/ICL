@@ -14,7 +14,7 @@ import (
 func parseProviderBlock(t *testing.T, source string) (*parser.Block, *diagnostics.Reporter) {
 	t.Helper()
 
-	scan := lexer.New(source)
+	scan := lexer.New(source, diagnostics.New(source))
 	parseReporter := diagnostics.New(source)
 	p := parser.New(scan.Tokens(), parseReporter)
 	prog := p.ParseProgram()
@@ -41,7 +41,7 @@ func TestEvalProvider_HappyPath(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if evalReporter.HasErrors() {
 		t.Fatalf("unexpected eval errors: %+v", evalReporter.Diagnostics())
@@ -70,7 +70,7 @@ func TestEvalProvider_MissingSource(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected an error for missing required field 'source'")
@@ -93,7 +93,7 @@ func TestEvalProvider_SourceWrongType(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error for source = 5")
@@ -116,7 +116,7 @@ func TestEvalProvider_VersionWrongType(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error for version = 5.0")
@@ -136,7 +136,7 @@ func TestEvalProvider_ExtraFieldsCaptured(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if evalReporter.HasErrors() {
 		t.Fatalf("unexpected eval errors: %+v", evalReporter.Diagnostics())
@@ -169,7 +169,7 @@ func TestEvalProvider_MultipleErrorsAllReported(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	EvalProvider(block, NewEnv(), evalReporter)
+	evalProvider(block, newEnv(), evalReporter)
 
 	diags := evalReporter.Diagnostics()
 	if len(diags) < 2 {
@@ -183,7 +183,7 @@ func TestEvalProvider_EmptyBody(t *testing.T) {
 	block, _ := parseProviderBlock(t, src)
 
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a missing-required-field error for an empty provider block")
@@ -200,7 +200,7 @@ func TestEvalProvider_ArithmeticValueWrongType(t *testing.T) {
 }`
 	block, _ := parseProviderBlock(t, src)
 	evalReporter := diagnostics.New(src)
-	cfg := EvalProvider(block, NewEnv(), evalReporter)
+	cfg := evalProvider(block, newEnv(), evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error: source evaluated to an int, not a string")

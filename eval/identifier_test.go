@@ -9,10 +9,10 @@ import (
 // --- Identifier / Environment resolution ---
 
 func TestIdentifier_Found(t *testing.T) {
-	env := NewEnv()
-	env.Set("bucket_name", *StringValue("my-bucket"))
+	env := newEnv()
+	env.set("bucket_name", *StringValue("my-bucket"))
 
-	v := Eval(&parser.Identifier{Name: "bucket_name"}, env, newReporter())
+	v := eval(&parser.Identifier{Name: "bucket_name"}, env, newReporter())
 	if v.Kind != KindString || v.Str != "my-bucket" {
 		t.Fatalf("got %+v", v)
 	}
@@ -20,7 +20,7 @@ func TestIdentifier_Found(t *testing.T) {
 
 func TestIdentifier_Undefined(t *testing.T) {
 	reporter := newReporter()
-	v := Eval(&parser.Identifier{Name: "nope"}, NewEnv(), reporter)
+	v := eval(&parser.Identifier{Name: "nope"}, newEnv(), reporter)
 	if v != nil {
 		t.Fatal("expected failure for undefined reference")
 	}
@@ -30,11 +30,11 @@ func TestIdentifier_Undefined(t *testing.T) {
 }
 
 func TestIdentifier_ChildEnvironmentSeesParent(t *testing.T) {
-	parent := NewEnv()
-	parent.Set("x", *IntValue(1))
-	child := parent.Child()
+	parent := newEnv()
+	parent.set("x", *IntValue(1))
+	child := parent.child()
 
-	v := Eval(&parser.Identifier{Name: "x"}, child, newReporter())
+	v := eval(&parser.Identifier{Name: "x"}, child, newReporter())
 	if v.Int != 1 {
 		t.Fatalf("child scope should see parent value, got %+v ", v)
 	}

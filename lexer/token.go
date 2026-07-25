@@ -1,18 +1,20 @@
 package lexer
 
+import "github.com/aliamerj/icl/tokens"
+
 type Token struct {
-	Type    TokenType
+	Type    tokens.Type
 	Lexeme  string
 	Literal any
 	Line    int
 	Offset  int
 }
 
-func (s *Scanner) Tokens() []Token {
+func (s *scanner) Tokens() []Token {
 	return append([]Token(nil), s.tokens...)
 }
 
-func (s *Scanner) addConditionalToken(expected rune, yes, no TokenType) {
+func (s *scanner) addConditionalToken(expected rune, yes, no tokens.Type) {
 	if s.match(expected) {
 		s.addToken(yes)
 		return
@@ -20,11 +22,11 @@ func (s *Scanner) addConditionalToken(expected rune, yes, no TokenType) {
 	s.addToken(no)
 }
 
-func (s *Scanner) addToken(tokenType TokenType) {
+func (s *scanner) addToken(tokenType tokens.Type) {
 	s.addTokenLiteral(tokenType, nil)
 }
 
-func (s *Scanner) addTokenLiteral(tokenType TokenType, literal any) {
+func (s *scanner) addTokenLiteral(tokenType tokens.Type, literal any) {
 	s.tokens = append(s.tokens, Token{
 		Type:    tokenType,
 		Lexeme:  s.source[s.start:s.current],

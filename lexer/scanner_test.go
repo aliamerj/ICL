@@ -3,106 +3,168 @@ package lexer
 import (
 	"reflect"
 	"testing"
+
+	"github.com/aliamerj/icl/diagnostics"
+	"github.com/aliamerj/icl/tokens"
 )
 
 func TestScannerEmptySource(t *testing.T) {
-	assertTokens(t, "", []expectedToken{{EOF, "", nil, 1}})
+	assertTokens(t, "", []expectedToken{{tokens.EOF, "", nil, 1}})
 }
 
 func TestScannerSingleCharacterTokens(t *testing.T) {
 	assertTokens(t, "(){}.-+;*/", []expectedToken{
-		{LEFT_PAREN, "(", nil, 1}, {RIGHT_PAREN, ")", nil, 1},
-		{LEFT_BRACE, "{", nil, 1}, {RIGHT_BRACE, "}", nil, 1},
-		{DOT, ".", nil, 1}, {MINUS, "-", nil, 1}, {PLUS, "+", nil, 1},
-		{SEMICOLON, ";", nil, 1}, {STAR, "*", nil, 1}, {SLASH, "/", nil, 1},
-		{EOF, "", nil, 1},
+		{tokens.LEFT_PAREN, "(", nil, 1}, {tokens.RIGHT_PAREN, ")", nil, 1},
+		{tokens.LEFT_BRACE, "{", nil, 1}, {tokens.RIGHT_BRACE, "}", nil, 1},
+		{tokens.DOT, ".", nil, 1}, {tokens.MINUS, "-", nil, 1}, {tokens.PLUS, "+", nil, 1},
+		{tokens.SEMICOLON, ";", nil, 1}, {tokens.STAR, "*", nil, 1}, {tokens.SLASH, "/", nil, 1},
+		{tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerOneAndTwoCharacterOperators(t *testing.T) {
 	assertTokens(t, "! != = == > >= < <=", []expectedToken{
-		{BANG, "!", nil, 1}, {BANG_EQUAL, "!=", nil, 1},
-		{EQUAL, "=", nil, 1}, {EQUAL_EQUAL, "==", nil, 1},
-		{GREATER, ">", nil, 1}, {GREATER_EQUAL, ">=", nil, 1},
-		{LESS, "<", nil, 1}, {LESS_EQUAL, "<=", nil, 1}, {EOF, "", nil, 1},
+		{tokens.BANG, "!", nil, 1}, {tokens.BANG_EQUAL, "!=", nil, 1},
+		{tokens.EQUAL, "=", nil, 1}, {tokens.EQUAL_EQUAL, "==", nil, 1},
+		{tokens.GREATER, ">", nil, 1}, {tokens.GREATER_EQUAL, ">=", nil, 1},
+		{tokens.LESS, "<", nil, 1}, {tokens.LESS_EQUAL, "<=", nil, 1}, {tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerIdentifiers(t *testing.T) {
 	// Keywords are intentionally empty for now, so all words are identifiers.
 	assertTokens(t, "alpha _private value2 A_B_3", []expectedToken{
-		{IDENTIFIER, "alpha", nil, 1}, {IDENTIFIER, "_private", nil, 1},
-		{IDENTIFIER, "value2", nil, 1}, {IDENTIFIER, "A_B_3", nil, 1}, {EOF, "", nil, 1},
+		{tokens.IDENTIFIER, "alpha", nil, 1}, {tokens.IDENTIFIER, "_private", nil, 1},
+		{tokens.IDENTIFIER, "value2", nil, 1}, {tokens.IDENTIFIER, "A_B_3", nil, 1}, {tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerNumbers(t *testing.T) {
 	assertTokens(t, "0 42 3.14 0.5 123.", []expectedToken{
-		{NUMBER_INT, "0", int64(0), 1},
-		{NUMBER_INT, "42", int64(42), 1},
-		{NUMBER_FLOAT, "3.14", float64(3.14), 1},
-		{NUMBER_FLOAT, "0.5", float64(0.5), 1},
-		{NUMBER_INT, "123", int64(123), 1}, {DOT, ".", nil, 1},
-		{EOF, "", nil, 1},
+		{tokens.NUMBER_INT, "0", int64(0), 1},
+		{tokens.NUMBER_INT, "42", int64(42), 1},
+		{tokens.NUMBER_FLOAT, "3.14", float64(3.14), 1},
+		{tokens.NUMBER_FLOAT, "0.5", float64(0.5), 1},
+		{tokens.NUMBER_INT, "123", int64(123), 1}, {tokens.DOT, ".", nil, 1},
+		{tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerString(t *testing.T) {
 	assertTokens(t, `"hello, world" ""`, []expectedToken{
-		{STRING, `"hello, world"`, "hello, world", 1},
-		{STRING, `""`, "", 1}, {EOF, "", nil, 1},
+		{tokens.STRING, `"hello, world"`, "hello, world", 1},
+		{tokens.STRING, `""`, "", 1}, {tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerMultilineStringUpdatesLine(t *testing.T) {
 	assertTokens(t, "\"first\nsecond\" next", []expectedToken{
-		{STRING, "\"first\nsecond\"", "first\nsecond", 2},
-		{IDENTIFIER, "next", nil, 2}, {EOF, "", nil, 2},
+		{tokens.STRING, "\"first\nsecond\"", "first\nsecond", 2},
+		{tokens.IDENTIFIER, "next", nil, 2}, {tokens.EOF, "", nil, 2},
 	})
 }
 
 func TestScannerWhitespaceCommentsAndLineNumbers(t *testing.T) {
 	assertTokens(t, "  // ignored\nfoo\t+\n  12 // also ignored\nbar", []expectedToken{
-		{IDENTIFIER, "foo", nil, 2}, {PLUS, "+", nil, 2},
-		{NUMBER_INT, "12", int64(12), 3}, {IDENTIFIER, "bar", nil, 4}, {EOF, "", nil, 4},
+		{tokens.IDENTIFIER, "foo", nil, 2},
+		{tokens.PLUS, "+", nil, 2},
+		{tokens.NUMBER_INT, "12", int64(12), 3},
+		{tokens.IDENTIFIER, "bar", nil, 4}, {tokens.EOF, "", nil, 4},
 	})
 }
 
 func TestScannerMixedSource(t *testing.T) {
 	assertTokens(t, `var_name = (12.5 >= 10) + "ok"; // comment`, []expectedToken{
-		{IDENTIFIER, "var_name", nil, 1}, {EQUAL, "=", nil, 1}, {LEFT_PAREN, "(", nil, 1},
-		{NUMBER_FLOAT, "12.5", float64(12.5), 1}, {GREATER_EQUAL, ">=", nil, 1},
-		{NUMBER_INT, "10", int64(10), 1}, {RIGHT_PAREN, ")", nil, 1}, {PLUS, "+", nil, 1}, {STRING, `"ok"`, "ok", 1},
-		{SEMICOLON, ";", nil, 1}, {EOF, "", nil, 1},
+		{tokens.IDENTIFIER, "var_name", nil, 1}, {tokens.EQUAL, "=", nil, 1},
+		{tokens.LEFT_PAREN, "(", nil, 1},
+		{tokens.NUMBER_FLOAT, "12.5", float64(12.5), 1},
+		{tokens.GREATER_EQUAL, ">=", nil, 1},
+		{tokens.NUMBER_INT, "10", int64(10), 1}, {tokens.RIGHT_PAREN, ")", nil, 1},
+		{tokens.PLUS, "+", nil, 1}, {tokens.STRING, `"ok"`, "ok", 1},
+		{tokens.SEMICOLON, ";", nil, 1}, {tokens.EOF, "", nil, 1},
 	})
 }
 
 func TestScannerUnexpectedCharacterReportsErrorAndContinues(t *testing.T) {
-	scanner := New("@ok")
-	assertTokenList(t, scanner.Tokens(), []expectedToken{{IDENTIFIER, "ok", nil, 1}, {EOF, "", nil, 1}})
-	if !scanner.HasErrors() {
+	scanner, diags := newScanner("@ok")
+	assertTokenList(t, scanner.Tokens(), []expectedToken{{tokens.IDENTIFIER, "ok", nil, 1}, {tokens.EOF, "", nil, 1}})
+	if !diags.HasErrors() {
 		t.Fatal("expected an error for an unexpected character")
 	}
 }
 
 func TestScannerUnterminatedStringReportsErrorAndOmitsToken(t *testing.T) {
-	scanner := New(`"unfinished`)
-	assertTokenList(t, scanner.Tokens(), []expectedToken{{EOF, "", nil, 1}})
-	if !scanner.HasErrors() {
+	scanner, diags := newScanner(`"unfinished`)
+	assertTokenList(t, scanner.Tokens(), []expectedToken{{tokens.EOF, "", nil, 1}})
+	if !diags.HasErrors() {
 		t.Fatal("expected an error for an unterminated string")
 	}
 }
 
 type expectedToken struct {
-	tokenType TokenType
+	tokenType tokens.Type
 	lexeme    string
 	literal   any
 	line      int
 }
 
+func TestScannerUnicodeIdentifiers(t *testing.T) {
+	assertTokens(t, "\u03c0 caf\u00e9_\u53d8\u91cf2", []expectedToken{
+		{tokens.IDENTIFIER, "\u03c0", nil, 1},
+		{tokens.IDENTIFIER, "caf\u00e9_\u53d8\u91cf2", nil, 1},
+		{tokens.EOF, "", nil, 1},
+	})
+}
+
+func TestScannerStringEscapes(t *testing.T) {
+	assertTokens(t, `"line\n\"quoted\"\\tab\t"`, []expectedToken{
+		{tokens.STRING, `"line\n\"quoted\"\\tab\t"`, "line\n\"quoted\"\\tab\t", 1},
+		{tokens.EOF, "", nil, 1},
+	})
+}
+
+func TestScannerTokensReturnsACopy(t *testing.T) {
+	scanner := New("name", diagnostics.New("name"))
+	tks := scanner.Tokens()
+	tks[0].Lexeme = "changed"
+	tks[0].Type = tokens.NUMBER_INT
+
+	original := scanner.Tokens()
+	if original[0].Lexeme != "name" || original[0].Type != tokens.IDENTIFIER {
+		t.Fatalf("Tokens returned mutable scanner state: got %#v", original[0])
+	}
+}
+
+func TestScannerKeywordsFromTable(t *testing.T) {
+	for keyword, wantType := range keywords {
+		tokens := New(keyword, diagnostics.New(keyword)).Tokens()
+		if len(tokens) != 2 {
+			t.Fatalf("keyword %q: got %d tokens, want keyword and EOF", keyword, len(tokens))
+		}
+		if tokens[0].Type != wantType || tokens[0].Lexeme != keyword {
+			t.Errorf("keyword %q: got %#v, want type=%v and lexeme=%q", keyword, tokens[0], wantType, keyword)
+		}
+	}
+}
+
+func TestScannerTokenOffsets(t *testing.T) {
+	source := `provider aws {}`
+	tokens := New(source, diagnostics.New(source)).Tokens()
+
+	want := []int{0, 9, 13} // "provider", "aws", "{" - start offsets
+	for i, w := range want {
+		if tokens[i].Offset != w {
+			t.Errorf("token %d (%q): Offset = %d, want %d", i, tokens[i].Lexeme, tokens[i].Offset, w)
+		}
+	}
+	if tokens[len(tokens)-1].Offset != len(source) {
+		t.Errorf("EOF Offset = %d, want %d", tokens[len(tokens)-1].Offset, len(source))
+	}
+}
+
 func assertTokens(t *testing.T, source string, expected []expectedToken) {
 	t.Helper()
-	assertTokenList(t, New(source).Tokens(), expected)
+	assertTokenList(t, New(source, diagnostics.New(source)).Tokens(), expected)
 }
 
 func assertTokenList(t *testing.T, got []Token, expected []expectedToken) {
@@ -119,56 +181,8 @@ func assertTokenList(t *testing.T, got []Token, expected []expectedToken) {
 	}
 }
 
-func TestScannerUnicodeIdentifiers(t *testing.T) {
-	assertTokens(t, "\u03c0 caf\u00e9_\u53d8\u91cf2", []expectedToken{
-		{IDENTIFIER, "\u03c0", nil, 1},
-		{IDENTIFIER, "caf\u00e9_\u53d8\u91cf2", nil, 1},
-		{EOF, "", nil, 1},
-	})
-}
-
-func TestScannerStringEscapes(t *testing.T) {
-	assertTokens(t, `"line\n\"quoted\"\\tab\t"`, []expectedToken{
-		{STRING, `"line\n\"quoted\"\\tab\t"`, "line\n\"quoted\"\\tab\t", 1},
-		{EOF, "", nil, 1},
-	})
-}
-
-func TestScannerTokensReturnsACopy(t *testing.T) {
-	scanner := New("name")
-	tokens := scanner.Tokens()
-	tokens[0].Lexeme = "changed"
-	tokens[0].Type = NUMBER_INT
-
-	original := scanner.Tokens()
-	if original[0].Lexeme != "name" || original[0].Type != IDENTIFIER {
-		t.Fatalf("Tokens returned mutable scanner state: got %#v", original[0])
-	}
-}
-
-func TestScannerKeywordsFromTable(t *testing.T) {
-	for keyword, wantType := range keywords {
-		tokens := New(keyword).Tokens()
-		if len(tokens) != 2 {
-			t.Fatalf("keyword %q: got %d tokens, want keyword and EOF", keyword, len(tokens))
-		}
-		if tokens[0].Type != wantType || tokens[0].Lexeme != keyword {
-			t.Errorf("keyword %q: got %#v, want type=%v and lexeme=%q", keyword, tokens[0], wantType, keyword)
-		}
-	}
-}
-
-func TestScannerTokenOffsets(t *testing.T) {
-	source := `provider aws {}`
-	tokens := New(source).Tokens()
-
-	want := []int{0, 9, 13} // "provider", "aws", "{" - start offsets
-	for i, w := range want {
-		if tokens[i].Offset != w {
-			t.Errorf("token %d (%q): Offset = %d, want %d", i, tokens[i].Lexeme, tokens[i].Offset, w)
-		}
-	}
-	if tokens[len(tokens)-1].Offset != len(source) {
-		t.Errorf("EOF Offset = %d, want %d", tokens[len(tokens)-1].Offset, len(source))
-	}
+func newScanner(source string) (*scanner, *diagnostics.Reporter) {
+  diags := diagnostics.New(source)
+	scan := New(source, diags)
+	return scan, diags
 }

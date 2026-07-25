@@ -1,11 +1,11 @@
-package lexer
+package tokens
 
-//go:generate stringer -type=TokenType
-type TokenType int
+//go:generate stringer -type=Type
+type Type int
 
 const (
 	// Single-character tokens.
-	LEFT_PAREN TokenType = iota
+	LEFT_PAREN Type = iota
 	RIGHT_PAREN
 	LEFT_BRACE
 	RIGHT_BRACE
@@ -31,11 +31,11 @@ const (
 	STRING
 	NUMBER_INT
 	NUMBER_FLOAT
+	TRUE
+	FALSE
 
 	// Keywords
 	PROVIDER
-	TRUE
-	FALSE
 
 	EOF
 )

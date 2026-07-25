@@ -1,8 +1,11 @@
 package lexer
 
-import "github.com/aliamerj/icl/diagnostics"
+import (
+	"github.com/aliamerj/icl/diagnostics"
+	"github.com/aliamerj/icl/tokens"
+)
 
-type Scanner struct {
+type scanner struct {
 	source string
 	tokens []Token
 
@@ -13,12 +16,8 @@ type Scanner struct {
 	line    int
 }
 
-func New(source string) *Scanner {
-	return NewWithoutReporter(source, diagnostics.New(source))
-}
-
-func NewWithoutReporter(source string, reporter *diagnostics.Reporter) *Scanner {
-	t := &Scanner{
+func New(source string, reporter *diagnostics.Reporter) *scanner {
+	t := &scanner{
 		source:   source,
 		tokens:   make([]Token, 0),
 		reporter: reporter,
@@ -28,22 +27,14 @@ func NewWithoutReporter(source string, reporter *diagnostics.Reporter) *Scanner 
 	return t
 }
 
-func (s *Scanner) Diagnostics() []diagnostics.Diagnostic {
-	return s.reporter.Diagnostics()
-}
-
-func (s *Scanner) HasErrors() bool {
-	return s.reporter.HasErrors()
-}
-
-func (s *Scanner) scanTokens() {
+func (s *scanner) scanTokens() {
 	for !s.isAtEnd() {
 		s.start = s.current
 		s.scanToken()
 	}
 
 	s.tokens = append(s.tokens, Token{
-		Type:   EOF,
+		Type:   tokens.EOF,
 		Line:   s.line,
 		Offset: s.current,
 	})

@@ -6,11 +6,12 @@ import (
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/lexer"
+	"github.com/aliamerj/icl/tokens"
 )
 
 func parse(t *testing.T, source string) (*Program, *diagnostics.Reporter) {
 	t.Helper()
-	scan := lexer.New(source)
+	scan := lexer.New(source, diagnostics.New(source))
 	reporter := diagnostics.New(source)
 	p := New(scan.Tokens(), reporter)
 	prog := p.ParseProgram()
@@ -37,7 +38,7 @@ provider aws {
 	if !ok {
 		t.Fatalf("expected *Block, got %T", prog.Statements[0])
 	}
-	if block.Keyword != "provider" {
+	if block.Keyword != tokens.PROVIDER {
 		t.Errorf("Keyword = %q, want provider", block.Keyword)
 	}
 	if len(block.Labels) != 1 || block.Labels[0].Name != "aws" {
@@ -158,7 +159,7 @@ provider aws {
 		t.Fatalf("expected recovery to still parse 1 valid statement, got %d", len(prog.Statements))
 	}
 	block := prog.Statements[0].(*Block)
-	if block.Keyword != "provider" || len(block.Labels) != 1 || block.Labels[0].Name != "aws" {
+	if block.Keyword != tokens.PROVIDER || len(block.Labels) != 1 || block.Labels[0].Name != "aws" {
 		t.Errorf("recovered block is wrong: %+v", block)
 	}
 }

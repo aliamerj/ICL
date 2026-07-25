@@ -5,9 +5,10 @@ import (
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/lexer"
+	"github.com/aliamerj/icl/tokens"
 )
 
-func (p *Parser) expect(tt lexer.TokenType) (lexer.Token, bool) {
+func (p *parser) expect(tt tokens.Type) (lexer.Token, bool) {
 	if p.cur().Type != tt {
 		p.reporter.ErrorAtOffsetWithCode(
 			p.cur().Offset,
@@ -20,7 +21,7 @@ func (p *Parser) expect(tt lexer.TokenType) (lexer.Token, bool) {
 	return p.advance(), true
 }
 
-func (p *Parser) advance() lexer.Token {
+func (p *parser) advance() lexer.Token {
 	t := p.cur()
 	if p.pos < len(p.tokens)-1 {
 		p.pos++
@@ -28,20 +29,20 @@ func (p *Parser) advance() lexer.Token {
 	return t
 }
 
-func (p *Parser) cur() lexer.Token {
+func (p *parser) cur() lexer.Token {
 	return p.tokens[p.pos]
 }
 
-func rangeOf(tok lexer.Token) Range {
-	return Range{
-		Start: Pos{Line: tok.Line, Offset: tok.Offset},
-		End:   Pos{Line: tok.Line, Offset: tok.Offset + len(tok.Lexeme)},
+func rangeOf(tok lexer.Token) rangePos {
+	return rangePos{
+		Start: pos{Line: tok.Line, Offset: tok.Offset},
+		End:   pos{Line: tok.Line, Offset: tok.Offset + len(tok.Lexeme)},
 	}
 }
 
-func spanOf(start, end lexer.Token) Range {
-	return Range{
-		Start: Pos{Line: start.Line, Offset: start.Offset},
-		End:   Pos{Line: end.Line, Offset: end.Offset + len(end.Lexeme)},
+func spanOf(start, end lexer.Token) rangePos {
+	return rangePos{
+		Start: pos{Line: start.Line, Offset: start.Offset},
+		End:   pos{Line: end.Line, Offset: end.Offset + len(end.Lexeme)},
 	}
 }

@@ -1,28 +1,32 @@
 package parser
 
+import (
+	"github.com/aliamerj/icl/tokens"
+)
+
 // ---- Position tracking ----
 
-type Pos struct {
+type pos struct {
 	Line, Offset int
 }
 
-type Range struct {
-	Start, End Pos
+type rangePos struct {
+	Start, End pos
 }
 
 // ---- Base interfaces ----
 
-type Node interface {
-	Range() Range
+type node interface {
+	Range() rangePos
 }
 
 type Statement interface {
-	Node
+	node
 	statementNode()
 }
 
 type Expression interface {
-	Node
+	node
 	expressionNode()
 }
 
@@ -30,10 +34,10 @@ type Expression interface {
 
 type Identifier struct {
 	Name string
-	Rng  Range
+	Rng  rangePos
 }
 
-func (i *Identifier) Range() Range    { return i.Rng }
+func (i *Identifier) Range() rangePos    { return i.Rng }
 func (i *Identifier) expressionNode() {}
 
 // ---- Attribute: one `key = value` line ----
@@ -41,87 +45,87 @@ func (i *Identifier) expressionNode() {}
 type Attribute struct {
 	Name  *Identifier
 	Value Expression
-	Rng   Range
+	Rng   rangePos
 }
 
-func (a *Attribute) Range() Range   { return a.Rng }
+func (a *Attribute) Range() rangePos   { return a.Rng }
 func (a *Attribute) statementNode() {}
 
 // Block: the ONE shape for provider, resource, lookup, input, output, module, and nested blocks like filter/route
 
 type Block struct {
-	Keyword string        // "provider", "resource", "lookup", "filter"
+	Keyword tokens.Type   // "provider", "resource", "lookup", "filter"
 	Labels  []*Identifier // e.g. [aws_instance] — positional, pre-body identifiers
 	Name    *Identifier   // the `as app_server` alias — nil if absent
 	Body    *Body
-	Rng     Range
+	Rng     rangePos
 }
 
-func (b *Block) Range() Range   { return b.Rng }
+func (b *Block) Range() rangePos   { return b.Rng }
 func (b *Block) statementNode() {}
 
 // ---- Body: ordered statements inside { } — order matters for the formatter ----
 
 type Body struct {
 	Statements []Statement
-	Rng        Range
+	Rng        rangePos
 }
 
-func (b *Body) Range() Range { return b.Rng }
+func (b *Body) Range() rangePos { return b.Rng }
 
 // ---- Program: the file root ----
 
 type Program struct {
 	Statements []Statement
-	Rng        Range
+	Rng        rangePos
 }
 
-func (p *Program) Range() Range { return p.Rng }
+func (p *Program) Range() rangePos { return p.Rng }
 
 // ---- StringLiteral: "eu-west-1", "hashicorp/aws" ----
 
 type StringLiteral struct {
 	Value string // the unescaped string content
-	Rng   Range
+	Rng   rangePos
 }
 
-func (s *StringLiteral) Range() Range    { return s.Rng }
+func (s *StringLiteral) Range() rangePos    { return s.Rng }
 func (s *StringLiteral) expressionNode() {}
 
 // ---- IntLiteral: 123----
 type IntLiteral struct {
 	Value int64
-	Rng   Range
+	Rng   rangePos
 }
 
-func (n *IntLiteral) Range() Range    { return n.Rng }
+func (n *IntLiteral) Range() rangePos    { return n.Rng }
 func (n *IntLiteral) expressionNode() {}
 
 // ---- FloatLiteral: 14.13 ----
 type FloatLiteral struct {
 	Value float64
-	Rng   Range
+	Rng   rangePos
 }
 
-func (n *FloatLiteral) Range() Range    { return n.Rng }
+func (n *FloatLiteral) Range() rangePos    { return n.Rng }
 func (n *FloatLiteral) expressionNode() {}
 
 // ---- BoolLiteral:  TRUE or FALSE ----
 
 type BoolLiteral struct {
 	Value bool
-	Rng   Range
+	Rng   rangePos
 }
 
-func (b *BoolLiteral) Range() Range    { return b.Rng }
+func (b *BoolLiteral) Range() rangePos    { return b.Rng }
 func (b *BoolLiteral) expressionNode() {}
 
 type BinaryExpr struct {
 	Left     Expression
 	Operator string
 	Right    Expression
-	Rng      Range
+	Rng      rangePos
 }
 
-func (b *BinaryExpr) Range() Range    { return b.Rng }
+func (b *BinaryExpr) Range() rangePos    { return b.Rng }
 func (b *BinaryExpr) expressionNode() {}

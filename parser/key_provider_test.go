@@ -5,12 +5,13 @@ import (
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/lexer"
+	"github.com/aliamerj/icl/tokens"
 )
 
 func parseProvider(t *testing.T, input string) *Block {
 	t.Helper()
 
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
 	block := p.parseProviderBlock()
@@ -31,7 +32,7 @@ provider aws {
 }
 `)
 
-	if block.Keyword != "provider" {
+	if block.Keyword != tokens.PROVIDER {
 		t.Fatalf("expected provider, got %q", block.Keyword)
 	}
 
@@ -152,7 +153,7 @@ func TestParseProviderBlock_MissingLabel(t *testing.T) {
 provider {
 }
 `
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
 	block := p.parseProviderBlock()
@@ -170,7 +171,7 @@ func TestParseProviderBlock_MissingLeftBrace(t *testing.T) {
 	input := `
 provider aws
 `
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 	block := p.parseProviderBlock()
 
@@ -189,7 +190,7 @@ provider aws {
     region "us-east-1"
 }
 `
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
 	block := p.parseProviderBlock()
@@ -209,7 +210,7 @@ provider aws {
     region =
 }
 `
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
 	block := p.parseProviderBlock()

@@ -1,0 +1,6 @@
+provider aws {
+  source  = "hashicorp/aws"
+  version = "5.37.0"
+  region  = "eu-west-1"
+  }
+

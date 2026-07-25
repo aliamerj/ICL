@@ -10,7 +10,7 @@ import (
 func parseExpr(t *testing.T, input string) Expression {
 	t.Helper()
 
-	l := lexer.New(input)
+	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
 	expr := p.parseExpression()
@@ -230,7 +230,7 @@ func TestComparisonPrecedence(t *testing.T) {
 
 // Invalid input
 func TestUnexpectedToken(t *testing.T) {
-	l := lexer.New(")")
+	l := lexer.New(")", diagnostics.New(")"))
 	p := New(l.Tokens(), diagnostics.New(")"))
 
 	expr := p.parseExpression()

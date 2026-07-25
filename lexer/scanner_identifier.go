@@ -6,9 +6,10 @@ import (
 	"unicode"
 
 	"github.com/aliamerj/icl/diagnostics"
+	"github.com/aliamerj/icl/tokens"
 )
 
-func (s *Scanner) identifier() {
+func (s *scanner) identifier() {
 	for isAlphaNumeric(s.peek()) {
 		s.next()
 	}
@@ -16,28 +17,28 @@ func (s *Scanner) identifier() {
 	text := s.source[s.start:s.current]
 	switch text {
 	case "true":
-		s.addToken(TRUE)
+		s.addToken(tokens.TRUE)
 		return
 	case "false":
-		s.addToken(FALSE)
+		s.addToken(tokens.FALSE)
 		return
 	}
 
 	tokenType, ok := keywords[text]
 	if !ok {
-		tokenType = IDENTIFIER
+		tokenType = tokens.IDENTIFIER
 	}
 	s.addToken(tokenType)
 }
 
-func (s *Scanner) string() {
+func (s *scanner) string() {
 	var value strings.Builder
 
 	for !s.isAtEnd() {
 		ch := s.next()
 		switch ch {
 		case '"':
-			s.addTokenLiteral(STRING, value.String())
+			s.addTokenLiteral(tokens.STRING, value.String())
 			return
 		case '\\':
 			if s.isAtEnd() {
@@ -69,7 +70,7 @@ func (s *Scanner) string() {
 	s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.UNTERMINATED_STRING_LITERAL, "unterminated string literal", "add a closing quote before the end of the string")
 }
 
-func (s *Scanner) number() {
+func (s *scanner) number() {
 	isFloat := false
 	for isDigit(s.peek()) {
 		s.next()
@@ -91,7 +92,7 @@ func (s *Scanner) number() {
 			s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.ERROR_NUMBER_LITERAL, err.Error(), "invalid float literal")
 			return
 		}
-		s.addTokenLiteral(NUMBER_FLOAT, f)
+		s.addTokenLiteral(tokens.NUMBER_FLOAT, f)
 		return
 	}
 
@@ -100,7 +101,7 @@ func (s *Scanner) number() {
 		s.reporter.ErrorAtOffsetWithCode(s.start, diagnostics.ERROR_NUMBER_LITERAL, err.Error(), "check that the number literal is valid")
 		return
 	}
-	s.addTokenLiteral(NUMBER_INT, i)
+	s.addTokenLiteral(tokens.NUMBER_INT, i)
 }
 
 func isAlphaNumeric(ch rune) bool {

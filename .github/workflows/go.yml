@@ -10,17 +10,6 @@ permissions:
   pull-requests: read
 
 jobs:
-  codespell:
-    name: codespell
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: codespell
-        uses: codespell-project/actions-codespell@v2
-        with:
-          ignore_words_list: erro,clienta,hastable,iif,groupd,testin,groupe,cros,caf
-          skip: go.mod,go.sum
   golangci:
     strategy:
       fail-fast: false

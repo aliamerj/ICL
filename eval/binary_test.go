@@ -25,7 +25,7 @@ func TestEvalBinary_IntArithmetic(t *testing.T) {
 		{"/", 10, 2, 5},
 	}
 	for _, c := range cases {
-		v := Eval(binExpr(&parser.IntLiteral{Value: c.l}, c.op, &parser.IntLiteral{Value: c.r}), NewEnv(), newReporter())
+		v := eval(binExpr(&parser.IntLiteral{Value: c.l}, c.op, &parser.IntLiteral{Value: c.r}), newEnv(), newReporter())
 		if v.Kind != KindInt || v.Int != c.want {
 			t.Errorf("%d %s %d = %+v, want %d", c.l, c.op, c.r, v, c.want)
 		}
@@ -34,7 +34,7 @@ func TestEvalBinary_IntArithmetic(t *testing.T) {
 
 func TestEvalBinary_FloatPromotion(t *testing.T) {
 	// int + float must promote to float, not truncate.
-	v := Eval(binExpr(&parser.IntLiteral{Value: 1}, "+", &parser.FloatLiteral{Value: 0.5}), NewEnv(), newReporter())
+	v := eval(binExpr(&parser.IntLiteral{Value: 1}, "+", &parser.FloatLiteral{Value: 0.5}), newEnv(), newReporter())
 	if v.Kind != KindFloat || v.Float != 1.5 {
 		t.Fatalf("got %+v, want float 1.5", v)
 	}
@@ -43,7 +43,7 @@ func TestEvalBinary_FloatPromotion(t *testing.T) {
 func TestEvalBinary_IntDivisionTruncates(t *testing.T) {
 	// int / int stays int (Go integer division semantics) — deliberate,
 	// documenting the choice so it's not mistaken for a bug later.
-	v := Eval(binExpr(&parser.IntLiteral{Value: 5}, "/", &parser.IntLiteral{Value: 2}), NewEnv(), newReporter())
+	v := eval(binExpr(&parser.IntLiteral{Value: 5}, "/", &parser.IntLiteral{Value: 2}), newEnv(), newReporter())
 	if v.Kind != KindInt || v.Int != 2 {
 		t.Fatalf("got %+v, want int 2 (5/2 truncated)", v)
 	}
@@ -51,7 +51,7 @@ func TestEvalBinary_IntDivisionTruncates(t *testing.T) {
 
 func TestEvalBinary_DivisionByZero(t *testing.T) {
 	reporter := newReporter()
-	v := Eval(binExpr(&parser.IntLiteral{Value: 5}, "/", &parser.IntLiteral{Value: 0}), NewEnv(), reporter)
+	v := eval(binExpr(&parser.IntLiteral{Value: 5}, "/", &parser.IntLiteral{Value: 0}), newEnv(), reporter)
 	if v != nil {
 		t.Fatal("expected division by zero to fail")
 	}
@@ -62,7 +62,7 @@ func TestEvalBinary_DivisionByZero(t *testing.T) {
 
 func TestEvalBinary_ArithmeticOnNonNumericFails(t *testing.T) {
 	reporter := newReporter()
-	v := Eval(binExpr(&parser.StringLiteral{Value: "a"}, "+", &parser.IntLiteral{Value: 1}), NewEnv(), reporter)
+	v := eval(binExpr(&parser.StringLiteral{Value: "a"}, "+", &parser.IntLiteral{Value: 1}), newEnv(), reporter)
 	if v != nil {
 		t.Fatal("expected string + int to fail")
 	}
@@ -80,7 +80,7 @@ func TestEvalBinary_PrecedenceExample(t *testing.T) {
 		"-",
 		binExpr(&parser.IntLiteral{Value: 5}, "/", &parser.IntLiteral{Value: 2}),
 	)
-	v := Eval(expr, NewEnv(), newReporter())
+	v := eval(expr, newEnv(), newReporter())
 	if v.Kind != KindInt || v.Int != 10 {
 		t.Fatalf("got %+v, want int 10", v)
 	}
@@ -101,7 +101,7 @@ func TestEvalBinary_Equality(t *testing.T) {
 		{&parser.IntLiteral{Value: 5}, &parser.IntLiteral{Value: 6}, "!=", true},
 	}
 	for _, c := range cases {
-		v := Eval(binExpr(c.l, c.op, c.r), NewEnv(), newReporter())
+		v := eval(binExpr(c.l, c.op, c.r), newEnv(), newReporter())
 		if v.Kind != KindBool || v.Bool != c.want {
 			t.Errorf("%v %s %v = %+v, want bool %v", c.l, c.op, c.r, v, c.want)
 		}
@@ -120,7 +120,7 @@ func TestEvalBinary_Comparisons(t *testing.T) {
 		{">=", 5, 5, true}, {"<", 3, 5, true}, {"<=", 5, 5, true},
 	}
 	for _, c := range cases {
-		v := Eval(binExpr(&parser.IntLiteral{Value: c.l}, c.op, &parser.IntLiteral{Value: c.r}), NewEnv(), newReporter())
+		v := eval(binExpr(&parser.IntLiteral{Value: c.l}, c.op, &parser.IntLiteral{Value: c.r}), newEnv(), newReporter())
 		if v.Kind != KindBool || v.Bool != c.want {
 			t.Errorf("%d %s %d = %+v, want bool %v", c.l, c.op, c.r, v, c.want)
 		}
@@ -129,7 +129,7 @@ func TestEvalBinary_Comparisons(t *testing.T) {
 
 func TestEvalBinary_ComparisonOnNonNumericFails(t *testing.T) {
 	reporter := newReporter()
-	v := Eval(binExpr(&parser.StringLiteral{Value: "a"}, ">", &parser.StringLiteral{Value: "b"}), NewEnv(), reporter)
+	v := eval(binExpr(&parser.StringLiteral{Value: "a"}, ">", &parser.StringLiteral{Value: "b"}), newEnv(), reporter)
 	if v != nil {
 		t.Fatal("expected string comparison with > to fail")
 	}
@@ -143,7 +143,7 @@ func TestEvalBinary_ComparisonOnNonNumericFails(t *testing.T) {
 
 func TestParseAndEval_FullPrecedenceExample(t *testing.T) {
 	// (1+2)*4 - 5/2  ==  12 - 2  ==  10
-	v := Eval(&parser.IntLiteral{Value: (1+2)*4 - 5/2}, NewEnv(), diagnostics.New(""))
+	v := eval(&parser.IntLiteral{Value: (1+2)*4 - 5/2}, newEnv(), diagnostics.New(""))
 	if v.Kind != KindInt || v.Int != 10 {
 		t.Fatalf("got %+v, want int 10", v)
 	}
@@ -151,7 +151,7 @@ func TestParseAndEval_FullPrecedenceExample(t *testing.T) {
 
 func TestParseAndEval_ComparisonExpression(t *testing.T) {
 
-	v := Eval(&parser.BoolLiteral{Value: 1+2 > 3}, NewEnv(), diagnostics.New(""))
+	v := eval(&parser.BoolLiteral{Value: 1+2 > 3}, newEnv(), diagnostics.New(""))
 	if v.Kind != KindBool || v.Bool != false {
 		// 1+2 == 3, and 3 > 3 is false
 		t.Fatalf("got %+v, want bool false", v)

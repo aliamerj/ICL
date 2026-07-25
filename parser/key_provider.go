@@ -1,16 +1,18 @@
 package parser
 
-import "github.com/aliamerj/icl/lexer"
+import (
+	"github.com/aliamerj/icl/tokens"
+)
 
-func (p *Parser) parseProviderBlock() *Block {
+func (p *parser) parseProviderBlock() *Block {
 	kwTok := p.advance()
 
-	labelTok, ok := p.expect(lexer.IDENTIFIER)
+	labelTok, ok := p.expect(tokens.IDENTIFIER)
 	if !ok {
 		return nil
 	}
 
-	if _, ok := p.expect(lexer.LEFT_BRACE); !ok {
+	if _, ok := p.expect(tokens.LEFT_BRACE); !ok {
 		return nil
 	}
 
@@ -19,23 +21,23 @@ func (p *Parser) parseProviderBlock() *Block {
 		return nil
 	}
 
-	endTok, ok := p.expect(lexer.RIGHT_BRACE)
+	endTok, ok := p.expect(tokens.RIGHT_BRACE)
 	if !ok {
 		return nil
 	}
 
 	return &Block{
-		Keyword: "provider",
+    Keyword: tokens.PROVIDER,
 		Labels:  []*Identifier{{Name: labelTok.Lexeme, Rng: rangeOf(labelTok)}},
 		Body:    body,
 		Rng:     spanOf(kwTok, endTok),
 	}
 }
 
-func (p *Parser) parseBody() *Body {
+func (p *parser) parseBody() *Body {
 	body := &Body{}
 
-	for p.cur().Type != lexer.RIGHT_BRACE && p.cur().Type != lexer.EOF {
+	for p.cur().Type != tokens.RIGHT_BRACE && p.cur().Type != tokens.EOF {
 		attr := p.parseAttribute()
 		if attr == nil {
 			return nil
@@ -45,12 +47,12 @@ func (p *Parser) parseBody() *Body {
 	return body
 }
 
-func (p *Parser) parseAttribute() *Attribute {
-	keyTok, ok := p.expect(lexer.IDENTIFIER)
+func (p *parser) parseAttribute() *Attribute {
+	keyTok, ok := p.expect(tokens.IDENTIFIER)
 	if !ok {
 		return nil
 	}
-	if _, ok := p.expect(lexer.EQUAL); !ok {
+	if _, ok := p.expect(tokens.EQUAL); !ok {
 		return nil
 	}
 
@@ -62,6 +64,6 @@ func (p *Parser) parseAttribute() *Attribute {
 	return &Attribute{
 		Name:  &Identifier{Name: keyTok.Lexeme, Rng: rangeOf(keyTok)},
 		Value: value,
-		Rng:   Range{Start: rangeOf(keyTok).Start, End: value.Range().End},
+		Rng:   rangePos{Start: rangeOf(keyTok).Start, End: value.Range().End},
 	}
 }

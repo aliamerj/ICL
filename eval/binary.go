@@ -8,12 +8,12 @@ import (
 )
 
 // evalBinary — arithmetic + comparisons, with real type-coercion rules decided up front
-func evalBinary(e *parser.BinaryExpr, env *Environment, reporter *diagnostics.Reporter) *Value {
-	left := Eval(e.Left, env, reporter)
+func evalBinary(e *parser.BinaryExpr, env *environment, reporter *diagnostics.Reporter) *Value {
+	left := eval(e.Left, env, reporter)
 	if left == nil {
 		return nil
 	}
-	right := Eval(e.Right, env, reporter)
+	right := eval(e.Right, env, reporter)
 	if right == nil {
 		return nil
 	}

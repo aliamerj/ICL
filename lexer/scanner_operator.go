@@ -2,7 +2,7 @@ package lexer
 
 import "unicode/utf8"
 
-func (s *Scanner) match(expected rune) bool {
+func (s *scanner) match(expected rune) bool {
 	if s.isAtEnd() || s.peek() != expected {
 		return false
 	}
@@ -10,13 +10,13 @@ func (s *Scanner) match(expected rune) bool {
 	return true
 }
 
-func (s *Scanner) next() rune {
+func (s *scanner) next() rune {
 	ch, size := utf8.DecodeRuneInString(s.source[s.current:])
 	s.current += size
 	return ch
 }
 
-func (s *Scanner) peek() rune {
+func (s *scanner) peek() rune {
 	if s.isAtEnd() {
 		return 0
 	}
@@ -24,7 +24,7 @@ func (s *Scanner) peek() rune {
 	return ch
 }
 
-func (s *Scanner) peekNext() rune {
+func (s *scanner) peekNext() rune {
 	if s.isAtEnd() {
 		return 0
 	}
@@ -36,6 +36,6 @@ func (s *Scanner) peekNext() rune {
 	return ch
 }
 
-func (s *Scanner) isAtEnd() bool {
+func (s *scanner) isAtEnd() bool {
 	return s.current >= len(s.source)
 }
