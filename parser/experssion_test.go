@@ -243,3 +243,74 @@ func TestUnexpectedToken(t *testing.T) {
 		t.Fatal("expected diagnostic")
 	}
 }
+
+func TestParseExpression_ListLiteral(t *testing.T) {
+	expr := getExprValue(t, `["a", "b", 1]`)
+
+	list, ok := expr.(*ListExpr)
+	if !ok {
+		t.Fatalf("got %T, want *ast.ListExpr", expr)
+	}
+	if len(list.Elements) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(list.Elements))
+	}
+	if s, ok := list.Elements[0].(*StringLiteral); !ok || s.Value != "a" {
+		t.Errorf("element 0 = %+v, want StringLiteral(a)", list.Elements[0])
+	}
+	if i, ok := list.Elements[2].(*IntLiteral); !ok || i.Value != 1 {
+		t.Errorf("element 2 = %+v, want IntLiteral(1)", list.Elements[2])
+	}
+}
+
+func TestParseExpression_EmptyList(t *testing.T) {
+	expr := getExprValue(t, `[]`)
+	list, ok := expr.(*ListExpr)
+	if !ok || len(list.Elements) != 0 {
+		t.Fatalf("got %+v, want empty *ast.ListExpr", expr)
+	}
+}
+
+func TestParseExpression_ListTrailingComma(t *testing.T) {
+	expr := getExprValue(t, `["a", "b",]`)
+	list, ok := expr.(*ListExpr)
+	if !ok || len(list.Elements) != 2 {
+		t.Fatalf("got %+v, want 2-element *ast.ListExpr", expr)
+	}
+}
+
+func TestParseExpression_ObjectLiteral(t *testing.T) {
+	expr := getExprValue(t, `{
+    role_arn     = "arn:aws:iam::123:role/foo"
+    session_name = "session"
+  }`)
+
+	obj, ok := expr.(*ObjectExpr)
+	if !ok {
+		t.Fatalf("got %T, want *ast.ObjectExpr", expr)
+	}
+	if len(obj.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(obj.Fields))
+	}
+	if obj.Fields[0].Name.Name != "role_arn" {
+		t.Errorf("field 0 name = %q, want role_arn", obj.Fields[0].Name.Name)
+	}
+}
+
+func TestParseExpression_NestedListsAndObjects(t *testing.T) {
+	expr := getExprValue(t, `{
+    tags = ["a", "b"]
+  }`)
+	obj := expr.(*ObjectExpr)
+	list, ok := obj.Fields[0].Value.(*ListExpr)
+	if !ok || len(list.Elements) != 2 {
+		t.Fatalf("expected nested ListExpr with 2 elements, got %+v", obj.Fields[0].Value)
+	}
+}
+
+func TestParseExpression_UnclosedListReportsError(t *testing.T) {
+	full := "provider aws {\n  x = [\"a\", \"b\"\n}"
+	_, reporter := parse(t, full)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for unclosed list literal")
+	}
+}

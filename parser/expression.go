@@ -10,6 +10,10 @@ import (
 
 func (p *parser) parsePrimary() Expression {
 	switch p.cur().Type {
+	case tokens.LEFT_BRACKET:
+		return p.parseListLiteral()
+	case tokens.LEFT_BRACE:
+		return p.parseObjectLiteral()
 	case tokens.STRING:
 		tok := p.advance()
 		value, ok := tokenLiteral[string](p.reporter, tok, "string")
@@ -151,7 +155,6 @@ func (p *parser) parseFactor() Expression {
 	}
 }
 
-
 func tokenLiteral[T any](reporter *diagnostics.Reporter, tok lexer.Token, kind string) (T, bool) {
 	value, ok := tok.Literal.(T)
 	if ok {
@@ -166,4 +169,51 @@ func tokenLiteral[T any](reporter *diagnostics.Reporter, tok lexer.Token, kind s
 		"rebuild the scanner output or report this bug",
 	)
 	return zero, false
+}
+
+func (p *parser) parseListLiteral() Expression {
+
+	startTok := p.advance() // consume '['
+	var elements []Expression
+
+	for p.cur().Type != tokens.RIGHT_BRACKET && p.cur().Type != tokens.EOF {
+		elem := p.parseExpression()
+		if elem == nil {
+			return nil
+		}
+		elements = append(elements, elem)
+
+		if p.cur().Type == tokens.COMMA {
+			p.advance() // trailing comma before ']' is fine — loop condition catches it next iteration
+			continue
+		}
+		break
+	}
+
+	endTok, ok := p.expect(tokens.RIGHT_BRACKET)
+	if !ok {
+		return nil
+	}
+
+	return &ListExpr{Elements: elements, Rng: spanOf(startTok, endTok)}
+}
+
+func (p *parser) parseObjectLiteral() Expression {
+	startTok := p.advance() // consume '{'
+	var fields []*Attribute
+
+	for p.cur().Type != tokens.RIGHT_BRACE && p.cur().Type != tokens.EOF {
+		attr := p.parseAttribute() // exact same function block bodies already use
+		if attr == nil {
+			return nil
+		}
+		fields = append(fields, attr)
+	}
+
+	endTok, ok := p.expect(tokens.RIGHT_BRACE)
+	if !ok {
+		return nil
+	}
+
+	return &ObjectExpr{Fields: fields, Rng: spanOf(startTok, endTok)}
 }

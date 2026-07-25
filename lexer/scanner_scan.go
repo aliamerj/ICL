@@ -17,6 +17,12 @@ func (s *scanner) scanToken() {
 		s.addToken(tokens.LEFT_BRACE)
 	case '}':
 		s.addToken(tokens.RIGHT_BRACE)
+	case '[':
+		s.addToken(tokens.LEFT_BRACKET)
+	case ']':
+		s.addToken(tokens.RIGHT_BRACKET)
+	case ',':
+		s.addToken(tokens.COMMA)
 	case '.':
 		s.addToken(tokens.DOT)
 	case '-':

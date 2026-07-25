@@ -49,7 +49,7 @@ type Attribute struct {
 }
 
 func (a Attribute) Range() rangePos { return a.Rng }
-func (a Attribute) statementNode() {}
+func (a Attribute) statementNode()  {}
 
 // Block: the ONE shape for provider, resource, lookup, input, output, module, and nested blocks like filter/route
 
@@ -62,7 +62,7 @@ type Block struct {
 }
 
 func (b Block) Range() rangePos { return b.Rng }
-func (b Block) statementNode() {}
+func (b Block) statementNode()  {}
 
 // ---- Body: ordered statements inside { } — order matters for the formatter ----
 
@@ -129,3 +129,19 @@ type BinaryExpr struct {
 
 func (b BinaryExpr) Range() rangePos { return b.Rng }
 func (b BinaryExpr) expressionNode() {}
+
+type ListExpr struct {
+	Elements []Expression
+	Rng      rangePos
+}
+
+func (l *ListExpr) Range() rangePos { return l.Rng }
+func (l *ListExpr) expressionNode() {}
+
+type ObjectExpr struct {
+	Fields []*Attribute
+	Rng    rangePos
+}
+
+func (o *ObjectExpr) Range() rangePos { return o.Rng }
+func (o *ObjectExpr) expressionNode() {}

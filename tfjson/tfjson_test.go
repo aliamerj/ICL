@@ -20,7 +20,7 @@ func TestBuildDocument_SingleProvider(t *testing.T) {
 		},
 	}
 
-	doc, err := BuildDocument(configs)
+	doc, err := buildDocument(configs)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestBuildDocument_MultipleProviders(t *testing.T) {
 		{Name: "google", Source: "hashicorp/google", Version: "4.0", Extra: map[string]eval.Value{}},
 	}
 
-	doc, err := BuildDocument(configs)
+	doc, err := buildDocument(configs)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestBuildDocument_DuplicateProviderNameErrors(t *testing.T) {
 		{Name: "aws", Source: "hashicorp/aws", Version: "5.1", Extra: map[string]eval.Value{}},
 	}
 
-	_, err := BuildDocument(configs)
+	_, err := buildDocument(configs)
 	if err == nil {
 		t.Fatal("expected an error for duplicate provider name")
 	}
@@ -78,7 +78,7 @@ func TestBuildDocument_EmptyExtraStillProducesEmptyObject(t *testing.T) {
 		{Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
 	}
 
-	doc, err := BuildDocument(configs)
+	doc, err := buildDocument(configs)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

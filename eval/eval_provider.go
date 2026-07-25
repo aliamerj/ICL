@@ -12,6 +12,7 @@ import (
 // is syntax, this is meaning. Keeping them separate means the AST
 // never has to know what a "valid provider" looks like.
 type ProviderConfig struct {
+	Alias   string // e.g. "east" — from `as`, empty if none
 	Name    string // e.g. "aws" - from the block's label
 	Source  string
 	Version string
@@ -32,6 +33,9 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 	cfg := &ProviderConfig{
 		Name:  block.Labels[0].Name,
 		Extra: map[string]Value{},
+	}
+	if block.Name != nil {
+		cfg.Alias = block.Name.Name
 	}
 
 	for _, stmt := range block.Body.Statements {

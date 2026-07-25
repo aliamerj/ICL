@@ -12,6 +12,30 @@ func TestScannerEmptySource(t *testing.T) {
 	assertTokens(t, "", []expectedToken{{tokens.EOF, "", nil, 1}})
 }
 
+func TestScannerBracketAndCommaTokens(t *testing.T) {
+	assertTokens(t, "[ ] ,", []expectedToken{
+		{tokens.LEFT_BRACKET, "[", nil, 1},
+		{tokens.RIGHT_BRACKET, "]", nil, 1},
+		{tokens.COMMA, ",", nil, 1},
+		{tokens.EOF, "", nil, 1},
+	})
+}
+
+func TestScannerArrayLiteralLikeSequence(t *testing.T) {
+	// Not parsed yet — just confirming the lexer tokenizes the raw
+	// sequence correctly, since that's this layer's only job.
+	assertTokens(t, `["a", "b", 1]`, []expectedToken{
+		{tokens.LEFT_BRACKET, "[", nil, 1},
+		{tokens.STRING, `"a"`, "a", 1},
+		{tokens.COMMA, ",", nil, 1},
+		{tokens.STRING, `"b"`, "b", 1},
+		{tokens.COMMA, ",", nil, 1},
+		{tokens.NUMBER_INT, "1", int64(1), 1},
+		{tokens.RIGHT_BRACKET, "]", nil, 1},
+		{tokens.EOF, "", nil, 1},
+	})
+}
+
 func TestScannerSingleCharacterTokens(t *testing.T) {
 	assertTokens(t, "(){}.-+;*/", []expectedToken{
 		{tokens.LEFT_PAREN, "(", nil, 1}, {tokens.RIGHT_PAREN, ")", nil, 1},
@@ -182,7 +206,7 @@ func assertTokenList(t *testing.T, got []Token, expected []expectedToken) {
 }
 
 func newScanner(source string) (*scanner, *diagnostics.Reporter) {
-  diags := diagnostics.New(source)
+	diags := diagnostics.New(source)
 	scan := New(source, diags)
 	return scan, diags
 }

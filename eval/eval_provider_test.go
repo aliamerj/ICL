@@ -209,3 +209,31 @@ func TestEvalProvider_ArithmeticValueWrongType(t *testing.T) {
 		t.Errorf("cfg.Source = %q, want empty", cfg.Source)
 	}
 }
+
+func TestEvalProvider_AllowedAccountIdsAndAssumeRole(t *testing.T) {
+	src := `provider aws {
+  source              = "hashicorp/aws"
+  version             = "5.37.0"
+  allowed_account_ids = ["123456789012"]
+  assume_role = {
+    role_arn = "arn:aws:iam::123456789012:role/deploy"
+  }
+}`
+	block, _ := parseProviderBlock(t, src)
+	evalReporter := diagnostics.New(src)
+	cfg := evalProvider(block, newEnv(), evalReporter)
+
+	if evalReporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", evalReporter.Diagnostics())
+	}
+
+	ids, ok := cfg.Extra["allowed_account_ids"]
+	if !ok || ids.Kind != KindList || len(ids.List) != 1 || ids.List[0].Str != "123456789012" {
+		t.Errorf("allowed_account_ids = %+v", ids)
+	}
+
+	role, ok := cfg.Extra["assume_role"]
+	if !ok || role.Kind != KindObject || role.Object["role_arn"].Str != "arn:aws:iam::123456789012:role/deploy" {
+		t.Errorf("assume_role = %+v", role)
+	}
+}

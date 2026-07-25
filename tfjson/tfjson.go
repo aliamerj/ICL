@@ -22,7 +22,6 @@ type RequiredProvider struct {
 	Version string `json:"version,omitempty"`
 }
 
-
 // Marshal produces the actual bytes to write as main.tf.json.
 func Marshal(configs eval.Config) ([]byte, error) {
 	doc, err := buildDocument(configs.Provider)
@@ -39,26 +38,53 @@ func buildDocument(configs []eval.ProviderConfig) (*Document, error) {
 		Provider:  map[string]any{},
 	}
 
-	seen := map[string]bool{}
+	byType := map[string][]eval.ProviderConfig{}
 	for _, cfg := range configs {
-		if seen[cfg.Name] {
-			return nil, fmt.Errorf("duplicate provider %q", cfg.Name)
-		}
-		seen[cfg.Name] = true
+		byType[cfg.Name] = append(byType[cfg.Name], cfg)
+	}
 
-		doc.Terraform.RequiredProviders[cfg.Name] = RequiredProvider{
-			Source:  cfg.Source,
-			Version: cfg.Version,
+	for typ, instances := range byType {
+		// exactly one instance must supply source+version; error if
+		// none do, or if more than one disagrees.
+		var source, version string
+		for _, inst := range instances {
+			if inst.Source == "" && inst.Version == "" {
+				continue
+			}
+			if source != "" && (inst.Source != source || inst.Version != version) {
+				return nil, fmt.Errorf("provider %q: conflicting source/version across aliased instances", typ)
+			}
+			source, version = inst.Source, inst.Version
+		}
+		if source == "" {
+			return nil, fmt.Errorf("provider %q: no instance declares required source/version", typ)
+		}
+		doc.Terraform.RequiredProviders[typ] = RequiredProvider{Source: source, Version: version}
+
+		// duplicate check: same type + same alias (or both empty) twice = error
+		seenAlias := map[string]bool{}
+		var entries []map[string]any
+		for _, inst := range instances {
+			if seenAlias[inst.Alias] {
+				return nil, fmt.Errorf("provider %q: duplicate configuration for alias %q", typ, inst.Alias)
+			}
+			seenAlias[inst.Alias] = true
+
+			entry := map[string]any{}
+			if inst.Alias != "" {
+				entry["alias"] = inst.Alias
+			}
+			for k, v := range inst.Extra {
+				entry[k] = v.Native()
+			}
+			entries = append(entries, entry)
 		}
 
-		// Always emit provider.<name>, even if empty — `provider "aws" {}`
-		// is meaningful in real Terraform (uses default auth/config),
-		// not the same as omitting the provider entirely.
-		providerConfig := map[string]any{}
-		for k, v := range cfg.Extra {
-			providerConfig[k] = v.Native()
+		if len(entries) == 1 && entries[0]["alias"] == nil {
+			doc.Provider[typ] = entries[0] // single, unaliased -> plain object, matches your existing passing test
+		} else {
+			doc.Provider[typ] = entries // multiple, or the one instance is aliased -> array
 		}
-		doc.Provider[cfg.Name] = providerConfig
 	}
 
 	if len(doc.Terraform.RequiredProviders) == 0 {
@@ -67,7 +93,5 @@ func buildDocument(configs []eval.ProviderConfig) (*Document, error) {
 	if len(doc.Provider) == 0 {
 		doc.Provider = nil
 	}
-
 	return doc, nil
 }
-
