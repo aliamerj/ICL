@@ -72,5 +72,5 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 func printDiagnostics(diags []diagnostics.Diagnostic, source, filename string, w io.Writer) {
 	formatter := diagnostics.NewFormatter(source)
 	formatter.SetFilename(filename)
-	diagnostics.WriteAll(w, formatter, diags)
+	_ = diagnostics.WriteAll(w, formatter, diags)
 }
