@@ -2,6 +2,7 @@ package parser
 
 import (
 	"testing"
+	"time"
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/lexer"
@@ -374,4 +375,174 @@ func TestParseProgram_RangeCoversWholeFile(t *testing.T) {
 	if prog.Rng.End.Offset != len(src) {
 		t.Errorf("Program.Rng.End.Offset = %d, want %d", prog.Rng.End.Offset, len(src))
 	}
+}
+
+// getExprValue is a helper: parses a single provider block with one
+// attribute, and returns that attribute's parsed Expression.
+func getExprValue(t *testing.T, src string) Expression {
+	t.Helper()
+	full := "provider aws {\n  x = " + src + "\n}"
+	prog, reporter := parse(t, full)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected parse errors for %q: %+v", src, reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+	return attr.Value
+}
+
+func TestParseExpression_SimpleAddition(t *testing.T) {
+	expr := getExprValue(t, "1 + 2")
+
+	bin, ok := expr.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("got %T, want *BinaryExpr", expr)
+	}
+	if bin.Operator != "+" {
+		t.Errorf("Operator = %q, want +", bin.Operator)
+	}
+	left, ok := bin.Left.(*IntLiteral)
+	if !ok || left.Value != 1 {
+		t.Errorf("Left = %+v, want IntLiteral(1)", bin.Left)
+	}
+	right, ok := bin.Right.(*IntLiteral)
+	if !ok || right.Value != 2 {
+		t.Errorf("Right = %+v, want IntLiteral(2)", bin.Right)
+	}
+}
+
+func TestParseExpression_MultiplicationBindsTighterThanAddition(t *testing.T) {
+	// 1 + 2 * 3  must parse as  1 + (2 * 3), i.e. top-level operator is '+'
+	expr := getExprValue(t, "1 + 2 * 3")
+
+	top, ok := expr.(*BinaryExpr)
+	if !ok || top.Operator != "+" {
+		t.Fatalf("top-level = %+v, want '+' at the top", expr)
+	}
+	if _, ok := top.Left.(*IntLiteral); !ok {
+		t.Errorf("Left = %T, want IntLiteral(1)", top.Left)
+	}
+	right, ok := top.Right.(*BinaryExpr)
+	if !ok || right.Operator != "*" {
+		t.Fatalf("Right = %+v, want a nested '*' expression", top.Right)
+	}
+}
+
+func TestParseExpression_LeftAssociativity(t *testing.T) {
+	// 10 - 3 - 2  must parse as  (10 - 3) - 2, not 10 - (3 - 2)
+	expr := getExprValue(t, "10 - 3 - 2")
+
+	top, ok := expr.(*BinaryExpr)
+	if !ok || top.Operator != "-" {
+		t.Fatalf("top-level = %+v, want '-' at the top", expr)
+	}
+	left, ok := top.Left.(*BinaryExpr)
+	if !ok || left.Operator != "-" {
+		t.Fatalf("Left = %+v, want a nested '-' expression (10-3)", top.Left)
+	}
+	rightLit, ok := top.Right.(*IntLiteral)
+	if !ok || rightLit.Value != 2 {
+		t.Errorf("Right = %+v, want IntLiteral(2)", top.Right)
+	}
+}
+
+func TestParseExpression_Parentheses(t *testing.T) {
+	// (1 + 2) * 4  must parse with '*' at the top, '+' nested on the left
+	expr := getExprValue(t, "(1 + 2) * 4")
+
+	top, ok := expr.(*BinaryExpr)
+	if !ok || top.Operator != "*" {
+		t.Fatalf("top-level = %+v, want '*' at the top", expr)
+	}
+	left, ok := top.Left.(*BinaryExpr)
+	if !ok || left.Operator != "+" {
+		t.Fatalf("Left = %+v, want a nested '+' expression", top.Left)
+	}
+}
+
+func TestParseExpression_ComparisonBindsLooserThanArithmetic(t *testing.T) {
+	// 1 + 2 > 3  must parse as  (1 + 2) > 3
+	expr := getExprValue(t, "1 + 2 > 3")
+
+	top, ok := expr.(*BinaryExpr)
+	if !ok || top.Operator != ">" {
+		t.Fatalf("top-level = %+v, want '>' at the top", expr)
+	}
+	left, ok := top.Left.(*BinaryExpr)
+	if !ok || left.Operator != "+" {
+		t.Fatalf("Left = %+v, want a nested '+' expression", top.Left)
+	}
+}
+
+func TestParseExpression_Identifier(t *testing.T) {
+	expr := getExprValue(t, "bucket_name")
+
+	id, ok := expr.(*Identifier)
+	if !ok || id.Name != "bucket_name" {
+		t.Fatalf("got %+v, want Identifier(bucket_name)", expr)
+	}
+}
+
+func TestParseExpression_IdentifierInArithmetic(t *testing.T) {
+	expr := getExprValue(t, "count + 1")
+
+	bin, ok := expr.(*BinaryExpr)
+	if !ok || bin.Operator != "+" {
+		t.Fatalf("got %+v, want '+' expression", expr)
+	}
+	if _, ok := bin.Left.(*Identifier); !ok {
+		t.Errorf("Left = %T, want *Identifier", bin.Left)
+	}
+}
+
+func TestParseExpression_StillWorksForPlainLiterals(t *testing.T) {
+	// Regression check: existing single-literal attributes must still
+	// parse exactly as before, now that parseExpression routes through
+	// precedence climbing instead of returning a literal directly.
+	strExpr := getExprValue(t, `"hello"`)
+	if s, ok := strExpr.(*StringLiteral); !ok || s.Value != "hello" {
+		t.Errorf("got %+v, want StringLiteral(hello)", strExpr)
+	}
+
+	floatExpr := getExprValue(t, "12.6")
+	if f, ok := floatExpr.(*FloatLiteral); !ok || f.Value != 12.6 {
+		t.Errorf("got %+v, want FloatLiteral(12.6)", floatExpr)
+	}
+}
+
+func TestParseExpression_UnclosedParenReportsError(t *testing.T) {
+	full := "provider aws {\n  x = (1 + 2\n}"
+	_, reporter := parse(t, full)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for unclosed parenthesis")
+	}
+}
+
+func TestParseExpression_MissingRightOperandReportsErrorAndDoesNotHang(t *testing.T) {
+	full := "provider aws {\n  x = 1 +\n}"
+	done := make(chan struct{})
+	var reporter *diagnostics.Reporter
+
+	go func() {
+		_, reporter = parse(t, full)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if !reporter.HasErrors() {
+			t.Fatal("expected an error for a missing right operand")
+		}
+	case <-timeoutChan():
+		t.Fatal("parser hung on '1 +' with no right operand")
+	}
+}
+
+func timeoutChan() <-chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		time.Sleep(2 * time.Second)
+		close(ch)
+	}()
+	return ch
 }

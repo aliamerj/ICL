@@ -14,6 +14,15 @@ func (s *Scanner) identifier() {
 	}
 
 	text := s.source[s.start:s.current]
+	switch text {
+	case "true":
+		s.addToken(TRUE)
+		return
+	case "false":
+		s.addToken(FALSE)
+		return
+	}
+
 	tokenType, ok := keywords[text]
 	if !ok {
 		tokenType = IDENTIFIER

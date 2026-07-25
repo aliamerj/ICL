@@ -105,3 +105,23 @@ type FloatLiteral struct {
 
 func (n *FloatLiteral) Range() Range    { return n.Rng }
 func (n *FloatLiteral) expressionNode() {}
+
+// ---- BoolLiteral:  TRUE or FALSE ----
+
+type BoolLiteral struct {
+	Value bool
+	Rng   Range
+}
+
+func (b *BoolLiteral) Range() Range    { return b.Rng }
+func (b *BoolLiteral) expressionNode() {}
+
+type BinaryExpr struct {
+	Left     Expression
+	Operator string
+	Right    Expression
+	Rng      Range
+}
+
+func (b *BinaryExpr) Range() Range    { return b.Rng }
+func (b *BinaryExpr) expressionNode() {}

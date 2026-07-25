@@ -14,6 +14,7 @@ func main() {
       version = "5.37.0"
       someNumber = 5
       someFloat = 12.6
+      booVal = true
   }
 `
 	r := diagnostics.New(source)
