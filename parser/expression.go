@@ -45,7 +45,8 @@ func (p *parser) parsePrimary() Expression {
 		return &BoolLiteral{Value: false, Rng: rangeOf(tok)}
 	case tokens.IDENTIFIER:
 		tok := p.advance()
-		return &Identifier{Name: tok.Lexeme, Rng: rangeOf(tok)}
+		id := &Identifier{Name: tok.Lexeme, Rng: rangeOf(tok)}
+		return p.parsePostfix(id)
 	case tokens.LEFT_PAREN:
 		p.advance()
 		expr := p.parseExpression()
@@ -216,4 +217,23 @@ func (p *parser) parseObjectLiteral() Expression {
 	}
 
 	return &ObjectExpr{Fields: fields, Rng: spanOf(startTok, endTok)}
+}
+
+func (p *parser) parsePostfix(base Expression) Expression {
+	for p.cur().Type == tokens.DOT {
+		p.advance()
+		propTok, ok := p.expect(tokens.IDENTIFIER)
+		if !ok {
+			return nil
+		}
+		base = &MemberExpr{
+			Object:   base,
+			Property: propTok.Lexeme,
+			Rng: rangePos{
+				Start: base.Range().Start,
+				End:   rangeOf(propTok).End,
+			},
+		}
+	}
+	return base
 }

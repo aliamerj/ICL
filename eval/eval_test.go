@@ -74,3 +74,85 @@ func TestValue_NativeRecursesThroughNesting(t *testing.T) {
 		t.Errorf("nested Native() conversion wrong: %+v", native)
 	}
 }
+
+func memberExpr(objName, property string) *parser.MemberExpr {
+	return &parser.MemberExpr{
+		Object:   &parser.Identifier{Name: objName},
+		Property: property,
+	}
+}
+
+func TestEval_ProviderFieldReference_Simple(t *testing.T) {
+	env := newEnv()
+	env.registry.providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+
+	v, ok := eval(memberExpr("aws", "region"), env, diagnostics.New(""))
+	if !ok || v.Kind != KindString || v.Str != "eu-west-1" {
+		t.Fatalf("got %+v, ok=%v", v, ok)
+	}
+}
+
+func TestEval_ProviderFieldReference_NonStringValues(t *testing.T) {
+	env := newEnv()
+	env.registry.providers.Add(newProviderCfg("aws", "",
+		map[string]Value{
+			"max_retries":         IntValue(5),
+			"allowed_account_ids": ListValue([]Value{StringValue("123")}),
+		}))
+
+	v, ok := eval(memberExpr("aws", "max_retries"), env, diagnostics.New(""))
+	if !ok || v.Kind != KindInt || v.Int != 5 {
+		t.Fatalf("got %+v, ok=%v", v, ok)
+	}
+
+	v2, ok := eval(memberExpr("aws", "allowed_account_ids"), env, diagnostics.New(""))
+	if !ok || v2.Kind != KindList || v2.List[0].Str != "123" {
+		t.Fatalf("got %+v, ok=%v", v2, ok)
+	}
+}
+
+func TestEval_ProviderFieldReference_AmbiguousWithoutAlias(t *testing.T) {
+	env := newEnv()
+	env.registry.providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.registry.providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+	reporter := diagnostics.New("")
+	_, ok := eval(memberExpr("aws", "region"), env, reporter)
+	if ok {
+		t.Fatal("expected ambiguity error for bare 'aws.region' with two aliases")
+	}
+	if !reporter.HasErrors() {
+		t.Fatal("expected a diagnostic")
+	}
+}
+
+func TestEval_ProviderFieldReference_ExplicitAliasResolvesAmbiguity(t *testing.T) {
+	env := newEnv()
+	env.registry.providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+  env.registry.providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+
+	v, ok := eval(&parser.MemberExpr{Object: memberExpr("aws", "east"), Property: "region"}, env, diagnostics.New(""))
+	if !ok || v.Str != "eu-west-1" {
+		t.Fatalf("got %+v, ok=%v, want eu-west-1", v, ok)
+	}
+}
+
+func TestEval_ProviderFieldReference_UndefinedProvider(t *testing.T) {
+	env := newEnv()
+
+	reporter := diagnostics.New("")
+	_, ok := eval(memberExpr("gcp", "region"), env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected undefined-provider error")
+	}
+}
+
+func TestEval_ProviderFieldReference_UndefinedField(t *testing.T) {
+	env := newEnv()
+	env.registry.providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+
+	reporter := diagnostics.New("")
+	_, ok := eval(memberExpr("aws", "nonexistent_field"), env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected undefined-field error")
+	}
+}

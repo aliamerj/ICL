@@ -1,24 +1,31 @@
 package eval
 
-// environment holds named values in scope - resources, data lookups,
-// locals, inputs. Flat map today; parent-scope chaining is the natural
-// extension point once `for`/nested scopes exist, so the shape is
-// deliberately ready for that without a rewrite.
+// Environment is a scope: local bindings (values) plus a shared pointer
+// back to the one Registry for the whole program. Child scopes (future
+// `for` bodies, nested blocks) get their own `values` but always share
+// the same Registry — a for-loop shouldn't spawn its own copy of every
+// provider/resource in the file, it just needs its own loop variable.
 type environment struct {
-	parent *environment
-	values map[string]Value
+	parent   *environment
+	values   map[string]Value
+	registry *Registry
 }
 
 func newEnv() *environment {
 	return &environment{
 		values: make(map[string]Value),
+		registry: &Registry{
+			providers: &providerRegistry{
+				instances: make(map[string]*ProviderConfig),
+			},
+		},
 	}
 }
 
 func (e *environment) child() *environment {
 	return &environment{
 		parent: e,
-		values: make(map[string]Value),
+		values: map[string]Value{},
 	}
 }
 

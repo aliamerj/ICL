@@ -111,7 +111,6 @@ func (n FloatLiteral) Range() rangePos { return n.Rng }
 func (n FloatLiteral) expressionNode() {}
 
 // ---- BoolLiteral:  TRUE or FALSE ----
-
 type BoolLiteral struct {
 	Value bool
 	Rng   rangePos
@@ -145,3 +144,12 @@ type ObjectExpr struct {
 
 func (o *ObjectExpr) Range() rangePos { return o.Rng }
 func (o *ObjectExpr) expressionNode() {}
+
+type MemberExpr struct {
+	Object   Expression
+	Property string
+	Rng      rangePos
+}
+
+func (m *MemberExpr) Range() rangePos { return m.Rng }
+func (m *MemberExpr) expressionNode() {}

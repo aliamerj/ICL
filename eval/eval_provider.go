@@ -72,6 +72,18 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 				continue
 			}
 			cfg.Version = val.Str
+
+		case "alias": // <-- add this, same shape as source/version
+			if val.Kind != KindString {
+				reporter.ErrorAtOffsetWithCode(
+					attr.Value.Range().Start.Offset,
+					diagnostics.TYPE_MISMATCH,
+					fmt.Sprintf("\"alias\" must be a string, got %s", val.Kind),
+					"e.g. alias = \"east\"",
+				)
+				continue
+			}
+			cfg.Alias = val.Str
 		default:
 			cfg.Extra[attr.Name.Name] = val
 		}

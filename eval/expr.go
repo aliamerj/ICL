@@ -69,6 +69,8 @@ func eval(expr parser.Expression, env *environment, reporter *diagnostics.Report
 		return evalIdentifier(e, env, reporter)
 	case *parser.BinaryExpr:
 		return evalBinary(e, env, reporter)
+	case *parser.MemberExpr:
+		return evalMemberExpr(e, env, reporter)
 	default:
 		reporter.ErrorAtOffsetWithCode(
 			expr.Range().Start.Offset,

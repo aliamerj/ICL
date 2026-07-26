@@ -314,3 +314,36 @@ func TestParseExpression_UnclosedListReportsError(t *testing.T) {
 		t.Fatal("expected an error for unclosed list literal")
 	}
 }
+
+// reference
+func TestParsePostfix_SimpleMemberAccess(t *testing.T) {
+	expr := getExprValue(t, "ubuntu.id")
+	m, ok := expr.(*MemberExpr)
+	if !ok {
+		t.Fatalf("got %T, want *MemberExpr", expr)
+	}
+	base, ok := m.Object.(*Identifier)
+	if !ok || base.Name != "ubuntu" {
+		t.Errorf("Object = %+v, want Identifier(ubuntu)", m.Object)
+	}
+	if m.Property != "id" {
+		t.Errorf("Property = %q, want id", m.Property)
+	}
+}
+
+func TestParsePostfix_ChainedMemberAccess(t *testing.T) {
+	// aws.east.region -> MemberExpr(MemberExpr(aws, east), region)
+	expr := getExprValue(t, "aws.east.region")
+	outer, ok := expr.(*MemberExpr)
+	if !ok || outer.Property != "region" {
+		t.Fatalf("outer = %+v, want Property=region", expr)
+	}
+	inner, ok := outer.Object.(*MemberExpr)
+	if !ok || inner.Property != "east" {
+		t.Fatalf("inner = %+v, want Property=region, ok=%v", outer.Object, ok)
+	}
+	base, ok := inner.Object.(*Identifier)
+	if !ok || base.Name != "aws" {
+		t.Errorf("base = %+v, want Identifier(aws)", inner.Object)
+	}
+}

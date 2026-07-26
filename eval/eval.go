@@ -24,6 +24,7 @@ func Run(prog *parser.Program, reporter *diagnostics.Reporter) Config {
 			cfg := evalProvider(block, env, reporter)
 			if cfg != nil {
 				configs.Provider = append(configs.Provider, *cfg)
+				env.registry.providers.Add(cfg) // now visible to any later block in the file
 			}
 			//todo more Keywords
 		}

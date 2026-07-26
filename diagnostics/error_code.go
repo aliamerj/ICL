@@ -21,4 +21,10 @@ const (
 	UNSUPPORTED_EXPRESSION errorCode = "E0204"
 	UNDEFINED_REFERENCE    errorCode = "E0205"
 	DIVISION_BY_ZERO       errorCode = "E0206"
+
+	INVALID_REFERENCE      errorCode = "E0210"
+	INVALID_PROVIDER_REF   errorCode = "E0211"
+	UNDEFINED_PROVIDER     errorCode = "E0212"
+	UNDEFINED_FIELD        errorCode = "E0213"
+	AMBIGUOUS_PROVIDER_REF errorCode = "E0214"
 )
