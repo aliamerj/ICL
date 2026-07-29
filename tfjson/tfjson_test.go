@@ -9,8 +9,8 @@ import (
 )
 
 func TestBuildDocument_SingleProvider(t *testing.T) {
-	configs := []eval.ProviderConfig{
-		{
+	configs := map[string]*eval.ProviderConfig{
+		"aws": {
 			Name:    "aws",
 			Source:  "hashicorp/aws",
 			Version: "5.37.0",
@@ -44,9 +44,9 @@ func TestBuildDocument_SingleProvider(t *testing.T) {
 }
 
 func TestBuildDocument_MultipleProviders(t *testing.T) {
-	configs := []eval.ProviderConfig{
-		{Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
-		{Name: "google", Source: "hashicorp/google", Version: "4.0", Extra: map[string]eval.Value{}},
+	configs := map[string]*eval.ProviderConfig{
+		"aws":    {Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
+		"google": {Name: "google", Source: "hashicorp/google", Version: "4.0", Extra: map[string]eval.Value{}},
 	}
 
 	doc, err := buildDocument(configs)
@@ -61,21 +61,9 @@ func TestBuildDocument_MultipleProviders(t *testing.T) {
 	}
 }
 
-func TestBuildDocument_DuplicateProviderNameErrors(t *testing.T) {
-	configs := []eval.ProviderConfig{
-		{Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
-		{Name: "aws", Source: "hashicorp/aws", Version: "5.1", Extra: map[string]eval.Value{}},
-	}
-
-	_, err := buildDocument(configs)
-	if err == nil {
-		t.Fatal("expected an error for duplicate provider name")
-	}
-}
-
 func TestBuildDocument_EmptyExtraStillProducesEmptyObject(t *testing.T) {
-	configs := []eval.ProviderConfig{
-		{Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
+	configs := map[string]*eval.ProviderConfig{
+    "aws":	{Name: "aws", Source: "hashicorp/aws", Version: "5.0", Extra: map[string]eval.Value{}},
 	}
 
 	doc, err := buildDocument(configs)
@@ -92,8 +80,10 @@ func TestBuildDocument_EmptyExtraStillProducesEmptyObject(t *testing.T) {
 }
 
 func TestMarshal_ProducesValidJSON(t *testing.T) {
-	configs := []eval.ProviderConfig{
-		{
+  env := eval.NewEnv()
+
+	env.Registry.Providers.Instances = map[string]*eval.ProviderConfig{
+    "aws": {
 			Name:    "aws",
 			Source:  "hashicorp/aws",
 			Version: "5.37.0",
@@ -103,8 +93,9 @@ func TestMarshal_ProducesValidJSON(t *testing.T) {
 			},
 		},
 	}
+   
 
-	out, err := Marshal(eval.Config{Provider: configs})
+	out, err := Marshal(env)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +136,7 @@ func TestMarshal_ProducesValidJSON(t *testing.T) {
 }
 
 func TestMarshal_NoProvidersProducesMinimalDocument(t *testing.T) {
-	out, err := Marshal(eval.Config{})
+	out, err := Marshal(eval.NewEnv())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

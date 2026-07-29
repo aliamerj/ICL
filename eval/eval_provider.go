@@ -7,10 +7,7 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
-// ProviderConfig is the resolved, typed result of evaluating a
-// `provider` block. This is intentionally NOT ast.Block -- the AST
-// is syntax, this is meaning. Keeping them separate means the AST
-// never has to know what a "valid provider" looks like.
+// ProviderConfig is the resolved, typed result of evaluating a `provider` block.
 type ProviderConfig struct {
 	Alias   string // e.g. "east" — from `as`, empty if none
 	Name    string // e.g. "aws" - from the block's label
@@ -19,7 +16,7 @@ type ProviderConfig struct {
 	Extra   map[string]Value // anything else the user set, kept for forward-compat
 }
 
-func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.Reporter) *ProviderConfig {
+func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.Reporter)  {
 	if len(block.Labels) != 1 {
 		reporter.ErrorAtOffsetWithCode(
 			block.Rng.Start.Offset,
@@ -27,7 +24,7 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 			"provider block must have exactly one label",
 			"e.g. `provider aws { ... }`",
 		)
-		return nil
+		return
 	}
 
 	cfg := &ProviderConfig{
@@ -98,5 +95,5 @@ func evalProvider(block *parser.Block, env *environment, reporter *diagnostics.R
 		)
 	}
 
-	return cfg
+  env.Registry.Providers.Add(cfg)
 }

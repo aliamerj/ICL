@@ -25,7 +25,13 @@ func (p *parser) ParseProgram() *Program {
 	for p.cur().Type != tokens.EOF {
 		switch p.cur().Type {
 		case tokens.PROVIDER:
-			if block := p.parseProviderBlock(); block != nil {
+			if block := p.parseBlock(tokens.PROVIDER); block != nil {
+				prog.Statements = append(prog.Statements, block)
+			} else {
+				p.synchronize()
+			}
+		case tokens.RESOURCE:
+			if block := p.parseBlock(tokens.RESOURCE); block != nil {
 				prog.Statements = append(prog.Statements, block)
 			} else {
 				p.synchronize()
@@ -54,7 +60,7 @@ func (p *parser) synchronize() {
 			return
 		}
 		switch p.cur().Type {
-		case tokens.PROVIDER:
+		case tokens.PROVIDER, tokens.RESOURCE:
 			return
 		}
 		p.advance()

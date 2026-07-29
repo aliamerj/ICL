@@ -7,7 +7,7 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
-func evalIdentifier(id *parser.Identifier, env *environment, reporter *diagnostics.Reporter) (Value, bool) {
+func evalIdentifier(id *parser.Identifier, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
 	v, ok := env.get(id.Name)
 	if !ok {
 		reporter.ErrorAtOffsetWithCode(

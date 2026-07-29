@@ -7,27 +7,28 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
-func Run(source string) (eval.Config, []diagnostics.Diagnostic) {
+func Run(source string) (*eval.Environment, []diagnostics.Diagnostic) {
 	// --- Lex ---
 	reporter := diagnostics.New(source)
 	scan := lexer.New(source, reporter)
 	tokens := scan.Tokens()
 	if reporter.HasErrors() {
-		return eval.Config{}, reporter.Diagnostics()
+		return nil, reporter.Diagnostics()
 	}
 
 	// --- Parse ---
-	p := parser.New(tokens, reporter) 
+	p := parser.New(tokens, reporter)
 	prog := p.ParseProgram()
 	if reporter.HasErrors() {
-		return eval.Config{}, reporter.Diagnostics()
+		return nil, reporter.Diagnostics()
 	}
 
 	// --- Eval ---
-	out := eval.Run(prog, reporter)
+	env := eval.NewEnv()
+	eval.Run(env, prog, reporter)
 	if reporter.HasErrors() {
-		return eval.Config{}, reporter.Diagnostics()
+		return env, reporter.Diagnostics()
 	}
 
-	return out, nil
+	return env, nil
 }

@@ -10,12 +10,12 @@ import (
 )
 
 type providerRegistry struct {
-	instances map[string]*ProviderConfig // key: "name" or "name.alias"
+	Instances map[string]*ProviderConfig // key: "name" or "name.alias"
 }
 
 
 func (r *providerRegistry) Add(cfg *ProviderConfig) {
-	r.instances[registryKey(cfg.Name, cfg.Alias)] = cfg
+	r.Instances[registryKey(cfg.Name, cfg.Alias)] = cfg
 }
 
 func registryKey(name, alias string) string {
@@ -26,7 +26,7 @@ func registryKey(name, alias string) string {
 }
 
 func (r *providerRegistry) lookup(name, alias string) (*ProviderConfig, bool) {
-	cfg, ok := r.instances[registryKey(name, alias)]
+	cfg, ok := r.Instances[registryKey(name, alias)]
 	return cfg, ok
 }
 
@@ -34,7 +34,7 @@ func (r *providerRegistry) lookup(name, alias string) (*ProviderConfig, bool) {
 // used both to detect ambiguity and to build "did you mean" hints.
 func (r *providerRegistry) instancesOf(name string) []*ProviderConfig {
 	var out []*ProviderConfig
-	for _, cfg := range r.instances {
+	for _, cfg := range r.Instances {
 		if cfg.Name == name {
 			out = append(out, cfg)
 		}
@@ -45,23 +45,7 @@ func (r *providerRegistry) instancesOf(name string) []*ProviderConfig {
 	return out
 }
 
-func fieldNames(extra map[string]Value) []string {
-	names := make([]string, 0, len(extra))
-	for k := range extra {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func displayRef(typ, alias string) string {
-	if alias == "" {
-		return typ
-	}
-	return typ + "." + alias
-}
-
-func (r *providerRegistry) ResolveProviderRef(expr parser.Expression, reporter *diagnostics.Reporter) (typ, alias string, ok bool) {
+func (r *providerRegistry) resolveRef(expr parser.Expression, reporter *diagnostics.Reporter) (typ, alias string, ok bool) {
 	switch e := expr.(type) {
 	case *parser.Identifier:
 		typ = e.Name
@@ -95,4 +79,11 @@ func (r *providerRegistry) ResolveProviderRef(expr parser.Expression, reporter *
 		return "", "", false
 	}
 	return typ, alias, true
+}
+
+func displayRef(typ, alias string) string {
+	if alias == "" {
+		return typ
+	}
+	return typ + "." + alias
 }

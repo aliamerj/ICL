@@ -39,14 +39,18 @@ func TestEvalProvider_HappyPath(t *testing.T) {
   version = "5.37.0"
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if evalReporter.HasErrors() {
 		t.Fatalf("unexpected eval errors: %+v", evalReporter.Diagnostics())
 	}
-	if cfg == nil {
+
+	cfg, looked := env.Registry.Providers.lookup("aws", "")
+
+	if cfg == nil || !looked {
 		t.Fatal("expected a non-nil ProviderConfig")
 	}
 	if cfg.Name != "aws" {
@@ -68,16 +72,19 @@ func TestEvalProvider_MissingSource(t *testing.T) {
   version = "5.37.0"
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected an error for missing required field 'source'")
 	}
 	// cfg is still returned (not nil) so callers can inspect what DID resolve,
 	// even though it's not safe to use for anything real — confirm that contract.
-	if cfg == nil {
+	cfg, looked := env.Registry.Providers.lookup("aws", "")
+
+	if cfg == nil || !looked {
 		t.Fatal("expected a non-nil ProviderConfig even when validation fails")
 	}
 	if cfg.Version != "5.37.0" {
@@ -91,13 +98,16 @@ func TestEvalProvider_SourceWrongType(t *testing.T) {
   version = "5.37.0"
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error for source = 5")
 	}
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
+
 	if cfg.Source != "" {
 		t.Errorf("cfg.Source = %q, want empty since the value was rejected", cfg.Source)
 	}
@@ -114,13 +124,16 @@ func TestEvalProvider_VersionWrongType(t *testing.T) {
   version = 5.0
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error for version = 5.0")
 	}
+
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
 	if cfg.Version != "" {
 		t.Errorf("cfg.Version = %q, want empty since the value was rejected", cfg.Version)
 	}
@@ -134,13 +147,15 @@ func TestEvalProvider_ExtraFieldsCaptured(t *testing.T) {
   maxRetries = 3
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if evalReporter.HasErrors() {
 		t.Fatalf("unexpected eval errors: %+v", evalReporter.Diagnostics())
 	}
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
 
 	region, ok := cfg.Extra["region"]
 	if !ok {
@@ -167,9 +182,10 @@ func TestEvalProvider_MultipleErrorsAllReported(t *testing.T) {
   version = 5.0
 }`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	diags := evalReporter.Diagnostics()
 	if len(diags) < 2 {
@@ -181,13 +197,17 @@ func TestEvalProvider_MultipleErrorsAllReported(t *testing.T) {
 func TestEvalProvider_EmptyBody(t *testing.T) {
 	src := `provider aws {}`
 	block, _ := parseProviderBlock(t, src)
+	env := NewEnv()
 
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	evalProvider(block, env, evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a missing-required-field error for an empty provider block")
 	}
+
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
+
 	if cfg.Name != "aws" {
 		t.Errorf("cfg.Name = %q, want aws (label should still resolve)", cfg.Name)
 	}
@@ -200,11 +220,14 @@ func TestEvalProvider_ArithmeticValueWrongType(t *testing.T) {
 }`
 	block, _ := parseProviderBlock(t, src)
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	env := NewEnv()
+
+	evalProvider(block, env, evalReporter)
 
 	if !evalReporter.HasErrors() {
 		t.Fatal("expected a type-mismatch error: source evaluated to an int, not a string")
 	}
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
 	if cfg.Source != "" {
 		t.Errorf("cfg.Source = %q, want empty", cfg.Source)
 	}
@@ -221,11 +244,13 @@ func TestEvalProvider_AllowedAccountIdsAndAssumeRole(t *testing.T) {
 }`
 	block, _ := parseProviderBlock(t, src)
 	evalReporter := diagnostics.New(src)
-	cfg := evalProvider(block, newEnv(), evalReporter)
+	env := NewEnv()
+	evalProvider(block, env, evalReporter)
 
 	if evalReporter.HasErrors() {
 		t.Fatalf("unexpected errors: %+v", evalReporter.Diagnostics())
 	}
+	cfg, _ := env.Registry.Providers.lookup("aws", "")
 
 	ids, ok := cfg.Extra["allowed_account_ids"]
 	if !ok || ids.Kind != KindList || len(ids.List) != 1 || ids.List[0].Str != "123456789012" {

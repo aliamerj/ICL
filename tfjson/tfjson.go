@@ -23,8 +23,8 @@ type RequiredProvider struct {
 }
 
 // Marshal produces the actual bytes to write as main.tf.json.
-func Marshal(configs eval.Config) ([]byte, error) {
-	doc, err := buildDocument(configs.Provider)
+func Marshal(env *eval.Environment) ([]byte, error) {
+	doc, err := buildDocument(env.Registry.Providers.Instances)
 	if err != nil {
 		return nil, err
 	}
@@ -32,13 +32,13 @@ func Marshal(configs eval.Config) ([]byte, error) {
 }
 
 // buildDocument assembles the Terraform-JSON document from all resolved
-func buildDocument(configs []eval.ProviderConfig) (*Document, error) {
+func buildDocument(configs map[string]*eval.ProviderConfig) (*Document, error) {
 	doc := &Document{
 		Terraform: &TerraformBlock{RequiredProviders: map[string]RequiredProvider{}},
 		Provider:  map[string]any{},
 	}
 
-	byType := map[string][]eval.ProviderConfig{}
+	byType := map[string][]*eval.ProviderConfig{}
 	for _, cfg := range configs {
 		byType[cfg.Name] = append(byType[cfg.Name], cfg)
 	}

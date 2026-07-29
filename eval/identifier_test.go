@@ -9,7 +9,7 @@ import (
 // --- Identifier / Environment resolution ---
 
 func TestIdentifier_Found(t *testing.T) {
-	env := newEnv()
+	env := NewEnv()
 	env.set("bucket_name", StringValue("my-bucket"))
 
 	v, ok := eval(&parser.Identifier{Name: "bucket_name"}, env, newReporter())
@@ -20,7 +20,7 @@ func TestIdentifier_Found(t *testing.T) {
 
 func TestIdentifier_Undefined(t *testing.T) {
 	reporter := newReporter()
-	v, ok := eval(&parser.Identifier{Name: "nope"}, newEnv(), reporter)
+	v, ok := eval(&parser.Identifier{Name: "nope"}, NewEnv(), reporter)
 	if ok {
 		t.Fatal("expected failure for undefined reference")
 	}
@@ -33,7 +33,7 @@ func TestIdentifier_Undefined(t *testing.T) {
 }
 
 func TestIdentifier_ChildEnvironmentSeesParent(t *testing.T) {
-	parent := newEnv()
+	parent := NewEnv()
 	parent.set("x", IntValue(1))
 	child := parent.child()
 

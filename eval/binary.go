@@ -8,7 +8,7 @@ import (
 )
 
 // evalBinary - arithmetic + comparisons, with real type-coercion rules decided up front
-func evalBinary(e *parser.BinaryExpr, env *environment, reporter *diagnostics.Reporter) (Value, bool) {
+func evalBinary(e *parser.BinaryExpr, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
 	left, ok := eval(e.Left, env, reporter)
 	if !ok {
 		return Value{}, false

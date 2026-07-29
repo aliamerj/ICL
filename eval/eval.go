@@ -6,14 +6,7 @@ import (
 	"github.com/aliamerj/icl/tokens"
 )
 
-type Config struct {
-	Provider []ProviderConfig
-}
-
-func Run(prog *parser.Program, reporter *diagnostics.Reporter) Config {
-	configs := Config{}
-	env := newEnv()
-
+func Run(env *Environment, prog *parser.Program, reporter *diagnostics.Reporter) {
 	for _, stmt := range prog.Statements {
 		block, ok := stmt.(*parser.Block)
 		if !ok {
@@ -21,14 +14,9 @@ func Run(prog *parser.Program, reporter *diagnostics.Reporter) Config {
 		}
 		switch block.Keyword {
 		case tokens.PROVIDER:
-			cfg := evalProvider(block, env, reporter)
-			if cfg != nil {
-				configs.Provider = append(configs.Provider, *cfg)
-				env.registry.providers.Add(cfg) // now visible to any later block in the file
-			}
-			//todo more Keywords
+			evalProvider(block, env, reporter)
+		case tokens.RESOURCE:
+			evalResource(block, env, reporter)
 		}
 	}
-
-	return configs
 }

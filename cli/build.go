@@ -91,13 +91,13 @@ func buildFile(path, outDir string, stdout, stderr io.Writer) int {
 
 	sourceText := string(source)
 
-	configs, diags := pipeline.Run(sourceText)
+	env, diags := pipeline.Run(sourceText)
 	if len(diags) > 0 {
 		printDiagnostics(diags, sourceText, path, stderr)
 		return 1
 	}
 
-	out, err := tfjson.Marshal(configs)
+	out, err := tfjson.Marshal(env)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to build Terraform JSON: %v\n", err)
 		return 1

@@ -50,7 +50,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	}
 	sourceText := string(source)
 
-	configs, diags := pipeline.Run(sourceText)
+	env, diags := pipeline.Run(sourceText)
 	if len(diags) > 0 {
 		printDiagnostics(diags, sourceText, path, stderr)
 		return 1
@@ -58,12 +58,12 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 
 	// output provider
 	if *jsonLong || *jsonShort {
-		if err := output.FormatJSON(configs, stdout); err != nil {
+		if err := output.FormatJSON(env, stdout); err != nil {
 			fmt.Fprintf(stderr, "error: failed to format output: %v\n", err)
 			return 1
 		}
 	} else {
-		output.FormatPretty(configs, stdout)
+		output.FormatPretty(env, stdout)
 	}
 
 	return 0

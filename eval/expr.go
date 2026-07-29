@@ -34,7 +34,7 @@ type Value struct {
 // It returns the computed value plus a success flag. Errors are reported
 // through the diagnostic reporter; the boolean keeps control flow explicit
 // without heap-allocating wrapper pointers.
-func eval(expr parser.Expression, env *environment, reporter *diagnostics.Reporter) (Value, bool) {
+func eval(expr parser.Expression, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
 	switch e := expr.(type) {
 	case *parser.ListExpr:
 		items := make([]Value, 0, len(e.Elements))

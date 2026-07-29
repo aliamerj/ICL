@@ -8,12 +8,16 @@ import (
 	"github.com/aliamerj/icl/eval"
 )
 
-// FormatPretty renders a resolved provider config as a human-readable,
-// ICL-shaped block — mirrors the source syntax on purpose, so what you
-// see in `icl inspect` looks like what you'd write.
-func providerPretty(cfg eval.ProviderConfig) string {
+// providerPretty renders a provider config as a human-readable ICL block.
+func providerPretty(cfg *eval.ProviderConfig) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "provider %s {\n", cfg.Name)
+	b.WriteString("provider ")
+	b.WriteString(cfg.Name)
+	if cfg.Alias != "" {
+		b.WriteString(" as ")
+		b.WriteString(cfg.Alias)
+	}
+	b.WriteString(" {\n")
 	fmt.Fprintf(&b, "  source  = %q\n", cfg.Source)
 	fmt.Fprintf(&b, "  version = %q\n", cfg.Version)
 
@@ -29,12 +33,13 @@ func providerPretty(cfg eval.ProviderConfig) string {
 type jsonProvider struct {
 	Resource string         `json:"resource"`
 	Name     string         `json:"name"`
+	Alias    string         `json:"alias,omitempty"`
 	Source   string         `json:"source"`
 	Version  string         `json:"version"`
 	Extra    map[string]any `json:"extra,omitempty"`
 }
 
-func providerJSON(cfg eval.ProviderConfig) (string, error) {
+func providerJSON(cfg *eval.ProviderConfig) (string, error) {
 	extra := make(map[string]any, len(cfg.Extra))
 	for k, v := range cfg.Extra {
 		extra[k] = toNative(v)
@@ -43,6 +48,7 @@ func providerJSON(cfg eval.ProviderConfig) (string, error) {
 	out := jsonProvider{
 		Resource: "provider",
 		Name:     cfg.Name,
+		Alias:    cfg.Alias,
 		Source:   cfg.Source,
 		Version:  cfg.Version,
 		Extra:    extra,

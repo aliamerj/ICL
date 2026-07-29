@@ -14,21 +14,21 @@ func newReporter() *diagnostics.Reporter {
 // --- Literal evaluation ---
 
 func TestEval_StringLiteral(t *testing.T) {
-	v, ok := eval(&parser.StringLiteral{Value: "hello"}, newEnv(), newReporter())
+	v, ok := eval(&parser.StringLiteral{Value: "hello"}, NewEnv(), newReporter())
 	if !ok || v.Kind != KindString || v.Str != "hello" {
 		t.Fatalf("got %+v, ok=%v", v, ok)
 	}
 }
 
 func TestEval_IntLiteral(t *testing.T) {
-	v, ok := eval(&parser.IntLiteral{Value: 42}, newEnv(), newReporter())
+	v, ok := eval(&parser.IntLiteral{Value: 42}, NewEnv(), newReporter())
 	if !ok || v.Kind != KindInt || v.Int != 42 {
 		t.Fatalf("got %+v, ok=%v", v, ok)
 	}
 }
 
 func TestEval_FloatLiteral(t *testing.T) {
-	v, ok := eval(&parser.FloatLiteral{Value: 3.14}, newEnv(), newReporter())
+	v, ok := eval(&parser.FloatLiteral{Value: 3.14}, NewEnv(), newReporter())
 	if !ok || v.Kind != KindFloat || v.Float != 3.14 {
 		t.Fatalf("got %+v, ok=%v", v, ok)
 	}
@@ -39,7 +39,7 @@ func TestEval_ListExpr(t *testing.T) {
 		&parser.StringLiteral{Value: "a"},
 		&parser.IntLiteral{Value: 1},
 	}}
-	v, ok := eval(expr, newEnv(), diagnostics.New(""))
+	v, ok := eval(expr, NewEnv(), diagnostics.New(""))
 	if !ok || v.Kind != KindList || len(v.List) != 2 {
 		t.Fatalf("got %+v, ok=%v", v, ok)
 	}
@@ -52,7 +52,7 @@ func TestEval_ObjectExpr(t *testing.T) {
 	expr := &parser.ObjectExpr{Fields: []*parser.Attribute{
 		{Name: &parser.Identifier{Name: "role_arn"}, Value: &parser.StringLiteral{Value: "arn:..."}},
 	}}
-	v, ok := eval(expr, newEnv(), diagnostics.New(""))
+	v, ok := eval(expr, NewEnv(), diagnostics.New(""))
 	if !ok || v.Kind != KindObject {
 		t.Fatalf("got %+v, ok=%v", v, ok)
 	}
@@ -83,8 +83,8 @@ func memberExpr(objName, property string) *parser.MemberExpr {
 }
 
 func TestEval_ProviderFieldReference_Simple(t *testing.T) {
-	env := newEnv()
-	env.registry.providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+	env := NewEnv()
+	env.Registry.Providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
 
 	v, ok := eval(memberExpr("aws", "region"), env, diagnostics.New(""))
 	if !ok || v.Kind != KindString || v.Str != "eu-west-1" {
@@ -93,8 +93,8 @@ func TestEval_ProviderFieldReference_Simple(t *testing.T) {
 }
 
 func TestEval_ProviderFieldReference_NonStringValues(t *testing.T) {
-	env := newEnv()
-	env.registry.providers.Add(newProviderCfg("aws", "",
+	env := NewEnv()
+	env.Registry.Providers.Add(newProviderCfg("aws", "",
 		map[string]Value{
 			"max_retries":         IntValue(5),
 			"allowed_account_ids": ListValue([]Value{StringValue("123")}),
@@ -112,9 +112,9 @@ func TestEval_ProviderFieldReference_NonStringValues(t *testing.T) {
 }
 
 func TestEval_ProviderFieldReference_AmbiguousWithoutAlias(t *testing.T) {
-	env := newEnv()
-	env.registry.providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
-	env.registry.providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+	env := NewEnv()
+	env.Registry.Providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.Registry.Providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
 	reporter := diagnostics.New("")
 	_, ok := eval(memberExpr("aws", "region"), env, reporter)
 	if ok {
@@ -126,9 +126,9 @@ func TestEval_ProviderFieldReference_AmbiguousWithoutAlias(t *testing.T) {
 }
 
 func TestEval_ProviderFieldReference_ExplicitAliasResolvesAmbiguity(t *testing.T) {
-	env := newEnv()
-	env.registry.providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
-  env.registry.providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+	env := NewEnv()
+	env.Registry.Providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+  env.Registry.Providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
 
 	v, ok := eval(&parser.MemberExpr{Object: memberExpr("aws", "east"), Property: "region"}, env, diagnostics.New(""))
 	if !ok || v.Str != "eu-west-1" {
@@ -137,7 +137,7 @@ func TestEval_ProviderFieldReference_ExplicitAliasResolvesAmbiguity(t *testing.T
 }
 
 func TestEval_ProviderFieldReference_UndefinedProvider(t *testing.T) {
-	env := newEnv()
+	env := NewEnv()
 
 	reporter := diagnostics.New("")
 	_, ok := eval(memberExpr("gcp", "region"), env, reporter)
@@ -147,8 +147,8 @@ func TestEval_ProviderFieldReference_UndefinedProvider(t *testing.T) {
 }
 
 func TestEval_ProviderFieldReference_UndefinedField(t *testing.T) {
-	env := newEnv()
-	env.registry.providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+	env := NewEnv()
+	env.Registry.Providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
 
 	reporter := diagnostics.New("")
 	_, ok := eval(memberExpr("aws", "nonexistent_field"), env, reporter)

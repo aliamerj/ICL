@@ -39,6 +39,8 @@ const (
 
 	// Keywords
 	PROVIDER
+  RESOURCE
+  AS
 
 	EOF
 )

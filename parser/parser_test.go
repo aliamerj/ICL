@@ -156,7 +156,7 @@ provider aws {
 		t.Fatal("expected an error for stray top-level token, got none")
 	}
 	if len(prog.Statements) != 1 {
-		t.Fatalf("expected recovery to still parse 1 valid statement, got %d", len(prog.Statements))
+		t.Fatalf("expected recovery to still parse 1 valid statement, got %d :: %+v", len(prog.Statements), prog.Statements)
 	}
 	block := prog.Statements[0].(*Block)
 	if block.Keyword != tokens.PROVIDER || len(block.Labels) != 1 || block.Labels[0].Name != "aws" {
@@ -548,7 +548,6 @@ func timeoutChan() <-chan struct{} {
 	return ch
 }
 
-
 func TestParsePrimary_MalformedLiteralDoesNotPanic(t *testing.T) {
 	tokens := []lexer.Token{{Type: tokens.STRING, Lexeme: "\"broken\"", Literal: 123, Line: 1, Offset: 0}, {Type: tokens.EOF, Line: 1, Offset: 9}}
 	reporter := diagnostics.New("")
@@ -560,5 +559,190 @@ func TestParsePrimary_MalformedLiteralDoesNotPanic(t *testing.T) {
 	}
 	if !reporter.HasErrors() {
 		t.Fatal("expected malformed literal to report an error")
+	}
+}
+
+func TestParseResource_MissingNameIsAHardError(t *testing.T) {
+	// requireName=true for resource — unlike provider, omitting `as name`
+	// must fail, since an unnamed resource can never be referenced.
+	src := `
+resource aws_instance {
+  ami = "ami-123456"
+}
+`
+	prog, reporter := parse(t, src)
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for a resource with no name")
+	}
+	if len(prog.Statements) != 0 {
+		t.Errorf("expected 0 statements after failed block, got %d", len(prog.Statements))
+	}
+}
+
+func TestParseResource_MissingLabel(t *testing.T) {
+	src := `
+resource as app_server {
+  ami = "ami-123456"
+}
+`
+	_, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for a resource with no type label")
+	}
+}
+
+func TestParseResource_MissingOpenBrace(t *testing.T) {
+	src := `
+resource aws_instance as app_server
+  ami = "ami-123456"
+}
+`
+	_, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for missing '{'")
+	}
+}
+
+func TestParseResource_UnclosedBlock(t *testing.T) {
+	src := `
+resource aws_instance as app_server {
+  ami = "ami-123456"
+`
+	_, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for an unclosed block")
+	}
+}
+
+func TestParseResource_EmptyBody(t *testing.T) {
+	src := `resource aws_instance as app_server {}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	if len(block.Body.Statements) != 0 {
+		t.Errorf("expected 0 attributes, got %d", len(block.Body.Statements))
+	}
+}
+
+func TestParseResource_MemberExprAttributeValue(t *testing.T) {
+	// The exact shape resource blocks exist for: referencing another
+	// declared value (vpc_id = demo_vpc.id).
+	src := `
+resource aws_subnet as public_subnet {
+  vpc_id     = demo_vpc.id
+  cidr_block = "10.0.0.0/24"
+}
+`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+	member, ok := attr.Value.(*MemberExpr)
+	if !ok {
+		t.Fatalf("attr.Value type = %T, want *ast.MemberExpr", attr.Value)
+	}
+	base, ok := member.Object.(*Identifier)
+	if !ok || base.Name != "demo_vpc" || member.Property != "id" {
+		t.Errorf("MemberExpr = %+v, want demo_vpc.id", member)
+	}
+}
+
+func TestParseResource_ProviderMetaAttribute(t *testing.T) {
+	// provider = aws.east — parses as an ordinary attribute at this stage;
+	// EvalResource is responsible for pulling it out specially later.
+	src := `
+resource aws_instance as app_server {
+  ami      = "ami-123456"
+  provider = aws.east
+}
+`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[1].(*Attribute)
+	if attr.Name.Name != "provider" {
+		t.Fatalf("attr.Name = %q, want provider", attr.Name.Name)
+	}
+	if _, ok := attr.Value.(*MemberExpr); !ok {
+		t.Errorf("attr.Value type = %T, want *ast.MemberExpr", attr.Value)
+	}
+}
+
+func TestParseResource_Range(t *testing.T) {
+	src := `resource aws_instance as app_server {
+  ami = "ami-123456"
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	if block.Rng.Start.Offset != 0 {
+		t.Errorf("Rng.Start.Offset = %d, want 0", block.Rng.Start.Offset)
+	}
+	if block.Rng.End.Offset <= block.Rng.Start.Offset {
+		t.Errorf("Rng.End.Offset (%d) should be after Start (%d)", block.Rng.End.Offset, block.Rng.Start.Offset)
+	}
+}
+
+func TestParseProvider_StillOptionalNameAfterSharedParseBlock(t *testing.T) {
+	// Regression: extracting parseBlock(keyword, requireName) must not
+	// break provider's existing "name is optional" behavior.
+	src := `provider aws {
+  region = "eu-west-1"
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	if block.Name != nil {
+		t.Errorf("Name = %+v, want nil (provider name should still be optional)", block.Name)
+	}
+}
+
+func TestParseProvider_StillSupportsOptionalAliasName(t *testing.T) {
+	src := `provider aws as east {
+  region = "us-east-1"
+}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	if block.Name == nil || block.Name.Name != "east" {
+		t.Errorf("Name = %+v, want east", block.Name)
+	}
+}
+
+func TestParseProgram_RecoversAcrossDifferentKeywords(t *testing.T) {
+	src := `
+provider aws {
+  region =
+}
+
+resource aws_instance as app_server {
+  ami = "ami-123"
+}
+`
+	prog, reporter := parse(t, src)
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error from the broken provider block")
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 recovered statement, got %d", len(prog.Statements))
+	}
+	block := prog.Statements[0].(*Block)
+	if block.Keyword != tokens.RESOURCE || block.Name == nil || block.Name.Name != "app_server" {
+		t.Errorf("recovered block is wrong: %+v", block)
 	}
 }

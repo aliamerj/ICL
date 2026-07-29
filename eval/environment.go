@@ -5,40 +5,43 @@ package eval
 // `for` bodies, nested blocks) get their own `values` but always share
 // the same Registry — a for-loop shouldn't spawn its own copy of every
 // provider/resource in the file, it just needs its own loop variable.
-type environment struct {
-	parent   *environment
-	values   map[string]Value
-	registry *Registry
+type Environment struct {
+	Parent   *Environment
+	Values   map[string]Value
+	Registry *Registry
 }
 
-func newEnv() *environment {
-	return &environment{
-		values: make(map[string]Value),
-		registry: &Registry{
-			providers: &providerRegistry{
-				instances: make(map[string]*ProviderConfig),
+func NewEnv() *Environment {
+	return &Environment{
+		Values: make(map[string]Value),
+		Registry: &Registry{
+			Providers: &providerRegistry{
+				Instances: make(map[string]*ProviderConfig),
+			},
+			Resources: &resourceRegistry{
+				instances: make(map[string]*ResourceConfig),
 			},
 		},
 	}
 }
 
-func (e *environment) child() *environment {
-	return &environment{
-		parent: e,
-		values: map[string]Value{},
+func (e *Environment) child() *Environment {
+	return &Environment{
+		Parent: e,
+		Values: map[string]Value{},
 	}
 }
 
-func (e *environment) get(name string) (Value, bool) {
-	if v, ok := e.values[name]; ok {
+func (e *Environment) get(name string) (Value, bool) {
+	if v, ok := e.Values[name]; ok {
 		return v, true
 	}
-	if e.parent != nil {
-		return e.parent.get(name)
+	if e.Parent != nil {
+		return e.Parent.get(name)
 	}
 	return Value{}, false
 }
 
-func (e *environment) set(name string, v Value) {
-	e.values[name] = v
+func (e *Environment) set(name string, v Value) {
+	e.Values[name] = v
 }
