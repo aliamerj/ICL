@@ -1,31 +1,47 @@
+# Configure the AWS provider used by all resources in this file.
 provider aws {
-  source  = "hashicorp/aws"
+  # Provider source from the registry.
+  source = "hashicorp/aws"
+  # Pin the provider version for reproducible deployments.
   version = "5.37.0"
-  region  = "eu-west-1"
+  # AWS region where resources will be created.
+  region = "eu-west-1"
 }
 
+# Create the main Virtual Private Cloud (VPC).
 resource aws_vpc as demo_vpc {
+  # Primary IPv4 network for the VPC.
   cidr_block = "10.0.0.0/16"
-  tags = {
-    Name = "Terraform VPC"
-  }
+  # Resource tags help identify infrastructure.
+  tags = {Name = "Terraform VPC"}
 }
 
+# Create a public subnet inside the VPC.
 resource aws_subnet as public_subnet {
-  vpc_id     = demo_vpc.id
+  # Reference another resource using its alias.
+  vpc_id = demo_vpc.id
+  # Subnet CIDR must be contained within the VPC CIDR.
   cidr_block = "10.0.0.0/24"
 }
 
+# Internet Gateway enables internet access for the VPC.
 resource aws_internet_gateway as igw {
+  # Attach the gateway to the VPC.
   vpc_id = demo_vpc.id
 }
 
+# Route table defines how network traffic is routed.
 resource aws_route_table as public_rtb {
+  # Associate the route table with the VPC.
   vpc_id = demo_vpc.id
 }
 
+# Default route sends all outbound traffic to the Internet Gateway.
 resource aws_route as default_route {
-  route_table_id         = public_rtb.id
+  # Route table that receives this route.
+  route_table_id = public_rtb.id
+  # Match every IPv4 destination.
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = igw.id
+  # Forward traffic through the Internet Gateway.
+  gateway_id = igw.id
 }

@@ -43,9 +43,11 @@ func (i Identifier) expressionNode() {}
 // ---- Attribute: one `key = value` line ----
 
 type Attribute struct {
-	Name  *Identifier
-	Value Expression
-	Rng   rangePos
+	Name            *Identifier
+	Value           Expression
+	LeadingComments []string
+	TrailingComment string
+	Rng             rangePos
 }
 
 func (a Attribute) Range() rangePos { return a.Rng }
@@ -54,11 +56,13 @@ func (a Attribute) statementNode()  {}
 // Block: the ONE shape for provider, resource, lookup, input, output, module, and nested blocks like filter/route
 
 type Block struct {
-	Keyword tokens.Type   // "provider", "resource", "lookup", "filter"
-	Labels  []*Identifier // e.g. [aws_instance] — positional, pre-body identifiers
-	Name    *Identifier   // the `as app_server` alias — nil if absent
-	Body    *Body
-	Rng     rangePos
+	Keyword         tokens.Type   // "provider", "resource", "lookup", "filter"
+	Labels          []*Identifier // e.g. [aws_instance] — positional, pre-body identifiers
+	Name            *Identifier   // the `as app_server` alias — nil if absent
+	Body            *Body
+	LeadingComments []string
+	TrailingComment string
+	Rng             rangePos
 }
 
 func (b Block) Range() rangePos { return b.Rng }

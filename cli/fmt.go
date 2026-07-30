@@ -95,6 +95,7 @@ func formatFile(path string, write bool, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	parser.AttachComments(prog, l.Comments())
 	formatted := format(prog)
 
 	if write {
@@ -109,10 +110,9 @@ func formatFile(path string, write bool, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// Format reprints a Program canonically. Known limitation: comments are
-// not yet attached to AST nodes, so they are dropped. Revisit once the
-// AST carries trivia — flagged as a deliberate v0.1 scope cut, not an
-// oversight.
+// Format reprints a Program canonically. Comments must already be attached
+// to the AST by the caller; nested object and list literal trivia is still
+// intentionally dropped.
 func format(prog *parser.Program) string {
 	var b strings.Builder
 	for i, stmt := range prog.Statements {
@@ -135,6 +135,9 @@ func formatStatement(b *strings.Builder, stmt parser.Statement, depth int) {
 
 func formatBlock(b *strings.Builder, block *parser.Block, depth int) {
 	indent := strings.Repeat("  ", depth)
+	for _, c := range block.LeadingComments {
+		fmt.Fprintf(b, "%s# %s\n", indent, c)
+	}
 	b.WriteString(indent)
 	b.WriteString(strings.ToLower(block.Keyword.String()))
 	for _, label := range block.Labels {
@@ -152,12 +155,23 @@ func formatBlock(b *strings.Builder, block *parser.Block, depth int) {
 	}
 
 	b.WriteString(indent)
-	b.WriteString("}\n")
+	b.WriteString("}")
+	if block.TrailingComment != "" {
+		fmt.Fprintf(b, " # %s", block.TrailingComment)
+	}
+	b.WriteString("\n")
 }
 
 func formatAttribute(b *strings.Builder, attr *parser.Attribute, depth int) {
 	indent := strings.Repeat("  ", depth)
-	fmt.Fprintf(b, "%s%s = %s\n", indent, attr.Name.Name, formatExpr(attr.Value))
+	for _, c := range attr.LeadingComments {
+		fmt.Fprintf(b, "%s# %s\n", indent, c)
+	}
+	fmt.Fprintf(b, "%s%s = %s", indent, attr.Name.Name, formatExpr(attr.Value))
+	if attr.TrailingComment != "" {
+		fmt.Fprintf(b, " # %s", attr.TrailingComment)
+	}
+	b.WriteString("\n")
 }
 
 func formatExpr(expr parser.Expression) string {
@@ -168,11 +182,34 @@ func formatExpr(expr parser.Expression) string {
 		return fmt.Sprintf("%d", e.Value)
 	case *parser.FloatLiteral:
 		return fmt.Sprintf("%g", e.Value)
+	case *parser.BoolLiteral:
+		return fmt.Sprintf("%t", e.Value)
 	case *parser.Identifier:
 		return e.Name
 	case *parser.BinaryExpr:
 		return fmt.Sprintf("%s %s %s", formatExpr(e.Left), e.Operator, formatExpr(e.Right))
+	case *parser.MemberExpr:
+		return fmt.Sprintf("%s.%s", formatExpr(e.Object), e.Property)
+	case *parser.ListExpr:
+		parts := make([]string, 0, len(e.Elements))
+		for _, elem := range e.Elements {
+			parts = append(parts, formatExpr(elem))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case *parser.ObjectExpr:
+		parts := make([]string, 0, len(e.Fields))
+		for _, field := range e.Fields {
+			parts = append(parts, formatInlineAttribute(field))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
 	default:
 		return "?"
 	}
+}
+
+func formatInlineAttribute(attr *parser.Attribute) string {
+	if attr == nil || attr.Name == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s = %s", attr.Name.Name, formatExpr(attr.Value))
 }

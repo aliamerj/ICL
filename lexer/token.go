@@ -2,6 +2,11 @@ package lexer
 
 import "github.com/aliamerj/icl/tokens"
 
+type Comment struct {
+	Text string
+	Line int
+}
+
 type Token struct {
 	Type    tokens.Type
 	Lexeme  string
@@ -12,6 +17,10 @@ type Token struct {
 
 func (s *scanner) Tokens() []Token {
 	return append([]Token(nil), s.tokens...)
+}
+
+func (s *scanner) Comments() []Comment {
+	return append([]Comment(nil), s.comments...)
 }
 
 func (s *scanner) addConditionalToken(expected rune, yes, no tokens.Type) {

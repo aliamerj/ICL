@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/aliamerj/icl/diagnostics"
 	"github.com/aliamerj/icl/tokens"
@@ -43,12 +44,21 @@ func (s *scanner) scanToken() {
 		s.addConditionalToken('=', tokens.GREATER_EQUAL, tokens.GREATER)
 	case '/':
 		if s.match('/') {
+			commentStart := s.current
 			for s.peek() != '\n' && !s.isAtEnd() {
 				s.next()
 			}
+			s.comments = append(s.comments, Comment{Text: strings.TrimSpace(s.source[commentStart:s.current]), Line: s.line})
 			return
 		}
 		s.addToken(tokens.SLASH)
+	case '#':
+		commentStart := s.current
+		for s.peek() != '\n' && !s.isAtEnd() {
+			s.next()
+		}
+		s.comments = append(s.comments, Comment{Text: strings.TrimSpace(s.source[commentStart:s.current]), Line: s.line})
+		return
 	case ' ', '\r', '\t':
 		return
 	case '\n':

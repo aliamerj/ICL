@@ -6,8 +6,9 @@ import (
 )
 
 type scanner struct {
-	source string
-	tokens []Token
+	source   string
+	tokens   []Token
+	comments []Comment
 
 	reporter *diagnostics.Reporter
 
