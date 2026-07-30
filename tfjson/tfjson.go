@@ -3,14 +3,16 @@ package tfjson
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/aliamerj/icl/eval"
 )
 
 // Document mirrors Terraform's JSON Configuration Syntax root shape.
 type Document struct {
-	Terraform *TerraformBlock `json:"terraform,omitempty"`
-	Provider  map[string]any  `json:"provider,omitempty"`
+	Terraform *TerraformBlock           `json:"terraform,omitempty"`
+	Provider  map[string]any            `json:"provider,omitempty"`
+	Resource  map[string]map[string]any `json:"resource,omitempty"`
 }
 
 type TerraformBlock struct {
@@ -22,69 +24,48 @@ type RequiredProvider struct {
 	Version string `json:"version,omitempty"`
 }
 
+type providerEntry struct {
+	alias string
+	attrs map[string]any
+}
+
+func newDoc() *Document {
+	return &Document{
+		Terraform: &TerraformBlock{RequiredProviders: make(map[string]RequiredProvider)},
+	}
+}
+
 // Marshal produces the actual bytes to write as main.tf.json.
 func Marshal(env *eval.Environment) ([]byte, error) {
-	doc, err := buildDocument(env.Registry.Providers.Instances)
-	if err != nil {
+	doc := newDoc()
+	if err := buildProviders(doc, env.Registry.Providers.Instances); err != nil {
 		return nil, err
 	}
+	if err := buildResources(doc, env.Registry.Resources.Instances); err != nil {
+		return nil, err
+	}
+
 	return json.MarshalIndent(doc, "", "  ")
 }
 
-// buildDocument assembles the Terraform-JSON document from all resolved
-func buildDocument(configs map[string]*eval.ProviderConfig) (*Document, error) {
-	doc := &Document{
-		Terraform: &TerraformBlock{RequiredProviders: map[string]RequiredProvider{}},
-		Provider:  map[string]any{},
+func buildProviders(doc *Document, providers map[string]*eval.ProviderConfig) error {
+	if len(providers) == 0 {
+		doc.Terraform = nil
+		return nil
 	}
 
-	byType := map[string][]*eval.ProviderConfig{}
-	for _, cfg := range configs {
-		byType[cfg.Name] = append(byType[cfg.Name], cfg)
-	}
+	types := providerTypes(providers)
+	doc.Provider = make(map[string]any, len(types))
 
-	for typ, instances := range byType {
-		// exactly one instance must supply source+version; error if
-		// none do, or if more than one disagrees.
-		var source, version string
-		for _, inst := range instances {
-			if inst.Source == "" && inst.Version == "" {
-				continue
-			}
-			if source != "" && (inst.Source != source || inst.Version != version) {
-				return nil, fmt.Errorf("provider %q: conflicting source/version across aliased instances", typ)
-			}
-			source, version = inst.Source, inst.Version
-		}
-		if source == "" {
-			return nil, fmt.Errorf("provider %q: no instance declares required source/version", typ)
-		}
-		doc.Terraform.RequiredProviders[typ] = RequiredProvider{Source: source, Version: version}
-
-		// duplicate check: same type + same alias (or both empty) twice = error
-		seenAlias := map[string]bool{}
-		var entries []map[string]any
-		for _, inst := range instances {
-			if seenAlias[inst.Alias] {
-				return nil, fmt.Errorf("provider %q: duplicate configuration for alias %q", typ, inst.Alias)
-			}
-			seenAlias[inst.Alias] = true
-
-			entry := map[string]any{}
-			if inst.Alias != "" {
-				entry["alias"] = inst.Alias
-			}
-			for k, v := range inst.Extra {
-				entry[k] = v.Native()
-			}
-			entries = append(entries, entry)
+	for _, typ := range types {
+		instances := providerInstancesByType(providers, typ)
+		required, entries, err := buildProviderGroup(typ, instances)
+		if err != nil {
+			return err
 		}
 
-		if len(entries) == 1 && entries[0]["alias"] == nil {
-			doc.Provider[typ] = entries[0] // single, unaliased -> plain object, matches your existing passing test
-		} else {
-			doc.Provider[typ] = entries // multiple, or the one instance is aliased -> array
-		}
+		doc.Terraform.RequiredProviders[typ] = required
+		doc.Provider[typ] = encodeProviderEntries(entries)
 	}
 
 	if len(doc.Terraform.RequiredProviders) == 0 {
@@ -93,5 +74,166 @@ func buildDocument(configs map[string]*eval.ProviderConfig) (*Document, error) {
 	if len(doc.Provider) == 0 {
 		doc.Provider = nil
 	}
-	return doc, nil
+	return nil
+}
+
+func buildProviderGroup(typ string, instances []*eval.ProviderConfig) (RequiredProvider, []providerEntry, error) {
+	var required RequiredProvider
+	var seenRequired bool
+	entries := make([]providerEntry, 0, len(instances))
+	aliases := make(map[string]struct{}, len(instances))
+
+	for _, inst := range instances {
+		if inst == nil {
+			continue
+		}
+
+		if inst.Source != "" || inst.Version != "" {
+			current := RequiredProvider{Source: inst.Source, Version: inst.Version}
+			if seenRequired && current != required {
+				return RequiredProvider{}, nil, fmt.Errorf("provider %q: conflicting source/version across instances", typ)
+			}
+			required = current
+			seenRequired = true
+		}
+
+		if _, dup := aliases[inst.Alias]; dup {
+			return RequiredProvider{}, nil, fmt.Errorf("provider %q: duplicate configuration for alias %q", typ, inst.Alias)
+		}
+		aliases[inst.Alias] = struct{}{}
+
+		entries = append(entries, providerEntry{
+			alias: inst.Alias,
+			attrs: providerAttributes(inst),
+		})
+	}
+
+	if !seenRequired {
+		return RequiredProvider{}, nil, fmt.Errorf("provider %q: no instance declares required source/version", typ)
+	}
+
+	return required, entries, nil
+}
+
+func providerAttributes(inst *eval.ProviderConfig) map[string]any {
+	attrs := make(map[string]any, len(inst.Extra)+1)
+	if inst.Alias != "" {
+		attrs["alias"] = inst.Alias
+	}
+	for k, v := range inst.Extra {
+		attrs[k] = v.Native()
+	}
+	return attrs
+}
+
+func encodeProviderEntries(entries []providerEntry) any {
+	if len(entries) == 1 && entries[0].alias == "" {
+		return entries[0].attrs
+	}
+
+	out := make([]map[string]any, len(entries))
+	for i, entry := range entries {
+		out[i] = entry.attrs
+	}
+	return out
+}
+
+func providerTypes(providers map[string]*eval.ProviderConfig) []string {
+	types := make(map[string]struct{}, len(providers))
+	for _, cfg := range providers {
+		if cfg == nil {
+			continue
+		}
+		types[cfg.Name] = struct{}{}
+	}
+
+	out := make([]string, 0, len(types))
+	for typ := range types {
+		out = append(out, typ)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func providerInstancesByType(providers map[string]*eval.ProviderConfig, typ string) []*eval.ProviderConfig {
+	instances := make([]*eval.ProviderConfig, 0, len(providers))
+	for _, cfg := range providers {
+		if cfg != nil && cfg.Name == typ {
+			instances = append(instances, cfg)
+		}
+	}
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Alias == instances[j].Alias {
+			return instances[i].Source < instances[j].Source
+		}
+		return instances[i].Alias < instances[j].Alias
+	})
+	return instances
+}
+
+func buildResources(doc *Document, resources map[string]*eval.ResourceConfig) error {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	types := resourceTypes(resources)
+	doc.Resource = make(map[string]map[string]any, len(types))
+
+	for _, typ := range types {
+		entries := resourceInstancesByType(resources, typ)
+		resourceBlock := make(map[string]any, len(entries))
+		for _, r := range entries {
+			if r == nil {
+				continue
+			}
+			resourceBlock[r.Name] = resourceAttributes(r)
+		}
+		doc.Resource[typ] = resourceBlock
+	}
+
+	if len(doc.Resource) == 0 {
+		doc.Resource = nil
+	}
+	return nil
+}
+
+func resourceAttributes(r *eval.ResourceConfig) map[string]any {
+	attrs := make(map[string]any, len(r.Extra)+1)
+	for k, v := range r.Extra {
+		attrs[k] = v.Native()
+	}
+	if r.Provider != "" {
+		attrs["provider"] = r.Provider
+	}
+	return attrs
+}
+
+func resourceTypes(resources map[string]*eval.ResourceConfig) []string {
+	types := make(map[string]struct{}, len(resources))
+	for _, r := range resources {
+		if r == nil {
+			continue
+		}
+		types[r.Type] = struct{}{}
+	}
+
+	out := make([]string, 0, len(types))
+	for typ := range types {
+		out = append(out, typ)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func resourceInstancesByType(resources map[string]*eval.ResourceConfig, typ string) []*eval.ResourceConfig {
+	instances := make([]*eval.ResourceConfig, 0, len(resources))
+	for _, r := range resources {
+		if r != nil && r.Type == typ {
+			instances = append(instances, r)
+		}
+	}
+	sort.Slice(instances, func(i, j int) bool {
+		return instances[i].Name < instances[j].Name
+	})
+	return instances
 }

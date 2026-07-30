@@ -19,7 +19,7 @@ func NewEnv() *Environment {
 				Instances: make(map[string]*ProviderConfig),
 			},
 			Resources: &resourceRegistry{
-				instances: make(map[string]*ResourceConfig),
+				Instances: make(map[string]*ResourceConfig),
 			},
 		},
 	}

@@ -10,11 +10,27 @@ import (
 )
 
 func evalMemberExpr(m *parser.MemberExpr, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
-	// aws.region  ->  Object is a bare Identifier
 	if base, ok := m.Object.(*parser.Identifier); ok {
-		return resolveProviderField(base.Name, "", m.Property, m, env, reporter)
+		// Resource reference: demo_vpc.id — deferred, ICL can never know
+		// this value, so preserve it as a Terraform-side reference rather
+		// than trying to resolve it.
+		if resCfg, found := env.Registry.Resources.lookup(base.Name); found {
+			addr := fmt.Sprintf("%s.%s.%s", resCfg.Type, resCfg.Name, m.Property)
+			return RefValue(addr), true
+		}
+		// Provider field reference: aws.region — resolved right now,
+		// since the user already typed the literal value.
+		if len(env.Registry.Providers.instancesOf(base.Name)) > 0 {
+			return resolveProviderField(base.Name, "", m.Property, m, env, reporter)
+		}
+
+		reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.UNDEFINED_REFERENCE,
+			fmt.Sprintf("undefined reference %q — no resource or provider with that name", base.Name), "")
+		return Value{}, false
 	}
-	// aws.east.region  ->  Object is itself a MemberExpr (aws.east)
+
+  // aws.east.region — always a provider chain; resource references are
+	// always exactly two segments (name.property), never three.
 	if inner, ok := m.Object.(*parser.MemberExpr); ok {
 		if typeIdent, ok := inner.Object.(*parser.Identifier); ok {
 			return resolveProviderField(typeIdent.Name, inner.Property, m.Property, m, env, reporter)

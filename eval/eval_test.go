@@ -75,16 +75,9 @@ func TestValue_NativeRecursesThroughNesting(t *testing.T) {
 	}
 }
 
-func memberExpr(objName, property string) *parser.MemberExpr {
-	return &parser.MemberExpr{
-		Object:   &parser.Identifier{Name: objName},
-		Property: property,
-	}
-}
-
 func TestEval_ProviderFieldReference_Simple(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
 
 	v, ok := eval(memberExpr("aws", "region"), env, diagnostics.New(""))
 	if !ok || v.Kind != KindString || v.Str != "eu-west-1" {
@@ -94,7 +87,7 @@ func TestEval_ProviderFieldReference_Simple(t *testing.T) {
 
 func TestEval_ProviderFieldReference_NonStringValues(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "",
+	env.Registry.Providers.add(newProviderCfg("aws", "",
 		map[string]Value{
 			"max_retries":         IntValue(5),
 			"allowed_account_ids": ListValue([]Value{StringValue("123")}),
@@ -113,8 +106,8 @@ func TestEval_ProviderFieldReference_NonStringValues(t *testing.T) {
 
 func TestEval_ProviderFieldReference_AmbiguousWithoutAlias(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
-	env.Registry.Providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
 	reporter := diagnostics.New("")
 	_, ok := eval(memberExpr("aws", "region"), env, reporter)
 	if ok {
@@ -127,8 +120,8 @@ func TestEval_ProviderFieldReference_AmbiguousWithoutAlias(t *testing.T) {
 
 func TestEval_ProviderFieldReference_ExplicitAliasResolvesAmbiguity(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
-  env.Registry.Providers.Add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "east", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "west", map[string]Value{"region": StringValue("us-west-2")}))
 
 	v, ok := eval(&parser.MemberExpr{Object: memberExpr("aws", "east"), Property: "region"}, env, diagnostics.New(""))
 	if !ok || v.Str != "eu-west-1" {
@@ -148,11 +141,86 @@ func TestEval_ProviderFieldReference_UndefinedProvider(t *testing.T) {
 
 func TestEval_ProviderFieldReference_UndefinedField(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
+	env.Registry.Providers.add(newProviderCfg("aws", "", map[string]Value{"region": StringValue("eu-west-1")}))
 
 	reporter := diagnostics.New("")
 	_, ok := eval(memberExpr("aws", "nonexistent_field"), env, reporter)
 	if ok || !reporter.HasErrors() {
 		t.Fatal("expected undefined-field error")
+	}
+}
+
+func TestEval_ResourceNameTakesPrecedenceOverSameNamedProvider(t *testing.T) {
+	// Shouldn't normally happen given the flat-namespace collision check,
+	// but confirm the lookup order is deliberate, not accidental.
+	env := NewEnv()
+	env.Registry.Resources.add(&ResourceConfig{Type: "aws_vpc", Name: "aws"})
+
+	v, ok := eval(memberExpr("aws", "id"), env, diagnostics.New(""))
+	if !ok || v.Kind != KindRef {
+		t.Fatalf("expected resource resolution to win, got %+v ok=%v", v, ok)
+	}
+}
+
+func TestEval_UndefinedReferenceNeitherResourceNorProvider(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+	_, ok := eval(memberExpr("nonexistent", "id"), env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected an undefined-reference error")
+	}
+}
+
+func TestEval_ResourceReferenceProducesRefValue(t *testing.T) {
+	env := NewEnv()
+	env.Registry.Resources.add(&ResourceConfig{Type: "aws_vpc", Name: "demo_vpc"})
+
+	v, ok := eval(memberExpr("demo_vpc", "id"), env, diagnostics.New(""))
+	if !ok {
+		t.Fatal("expected success")
+	}
+	if v.Kind != KindRef {
+		t.Fatalf("Kind = %v, want KindRef", v.Kind)
+	}
+	if v.Str != "aws_vpc.demo_vpc.id" {
+		t.Errorf("Str = %q, want aws_vpc.demo_vpc.id", v.Str)
+	}
+}
+
+func TestEval_ProviderFieldStillResolvesEagerly(t *testing.T) {
+	// Regression: adding resource-reference support must not break the
+	// existing provider-field resolution path (aws.region).
+	env := NewEnv()
+	env.Registry.Providers.add(&ProviderConfig{
+		Name:  "aws",
+		Extra: map[string]Value{"region": StringValue("eu-west-1")},
+	})
+
+	v, ok := eval(memberExpr("aws", "region"), env, diagnostics.New(""))
+	if !ok || v.Kind != KindString || v.Str != "eu-west-1" {
+		t.Fatalf("got %+v, ok=%v", v, ok)
+	}
+}
+
+func TestEval_ChainedProviderReferenceStillWorks(t *testing.T) {
+	// Regression: aws.east.region (three-segment) must still route to
+	// provider resolution, not get misidentified as a resource lookup.
+	env := NewEnv()
+	env.Registry.Providers.add(&ProviderConfig{
+		Name: "aws", Alias: "east",
+		Extra: map[string]Value{"region": StringValue("us-east-1")},
+	})
+
+	expr := &parser.MemberExpr{Object: memberExpr("aws", "east"), Property: "region"}
+	v, ok := eval(expr, env, diagnostics.New(""))
+	if !ok || v.Str != "us-east-1" {
+		t.Fatalf("got %+v, ok=%v, want us-east-1", v, ok)
+	}
+}
+
+func memberExpr(objName, property string) *parser.MemberExpr {
+	return &parser.MemberExpr{
+		Object:   &parser.Identifier{Name: objName},
+		Property: property,
 	}
 }

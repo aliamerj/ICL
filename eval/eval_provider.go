@@ -70,7 +70,7 @@ func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 			}
 			cfg.Version = val.Str
 
-		case "alias": // <-- add this, same shape as source/version
+		case "alias": 
 			if val.Kind != KindString {
 				reporter.ErrorAtOffsetWithCode(
 					attr.Value.Range().Start.Offset,
@@ -95,5 +95,16 @@ func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 		)
 	}
 
-  env.Registry.Providers.Add(cfg)
+  	// Duplicate check now runs here, with real position info, catching
+	// both the plain case (two `provider aws {}`) and the aliased case
+	// (two `provider aws { alias = "east" }`) — checked only once
+	// Type+Alias are both fully known.
+	if env.Registry.Providers.has(cfg.Name, cfg.Alias) {
+		reporter.ErrorAtOffsetWithCode(block.Rng.Start.Offset, diagnostics.DUPLICATE_NAME,
+			fmt.Sprintf("provider %q is already declared", displayRef(cfg.Name, cfg.Alias)),
+			"use `alias` to declare more than one configuration of the same provider")
+		return
+	}
+
+  env.Registry.Providers.add(cfg)
 }

@@ -14,7 +14,7 @@ func newProviderCfg(name, alias string, extra map[string]Value) *ProviderConfig 
 
 func TestRegistry_LookupUnaliased(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "", nil))
+	env.Registry.Providers.add(newProviderCfg("aws", "", nil))
 	cfg, ok := env.Registry.Providers.lookup("aws", "")
 	if !ok || cfg.Name != "aws" {
 		t.Fatalf("got %+v, ok=%v", cfg, ok)
@@ -23,8 +23,8 @@ func TestRegistry_LookupUnaliased(t *testing.T) {
 
 func TestRegistry_LookupAliased(t *testing.T) {
 	env := NewEnv()
-	env.Registry.Providers.Add(newProviderCfg("aws", "east", nil))
-	env.Registry.Providers.Add(newProviderCfg("aws", "west", nil))
+	env.Registry.Providers.add(newProviderCfg("aws", "east", nil))
+	env.Registry.Providers.add(newProviderCfg("aws", "west", nil))
 	cfg, ok := env.Registry.Providers.lookup("aws", "east")
 	if !ok || cfg.Alias != "east" {
 		t.Fatalf("got %+v, ok=%v", cfg, ok)

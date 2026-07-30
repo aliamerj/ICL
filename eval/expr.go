@@ -18,6 +18,7 @@ const (
 	KindNull
 	KindList
 	KindObject
+	KindRef
 )
 
 type Value struct {
@@ -106,6 +107,8 @@ func (v Value) Native() any {
 			out[k] = val.Native()
 		}
 		return out
+	case KindRef:
+		return "${" + v.Str + "}"
 	default:
 		return nil
 	}
@@ -118,3 +121,4 @@ func BoolValue(b bool) Value                    { return Value{Kind: KindBool, B
 func NullValue() Value                          { return Value{Kind: KindNull} }
 func ListValue(items []Value) Value             { return Value{Kind: KindList, List: items} }
 func ObjectValue(fields map[string]Value) Value { return Value{Kind: KindObject, Object: fields} }
+func RefValue(terraformAddr string) Value       { return Value{Kind: KindRef, Str: terraformAddr} }

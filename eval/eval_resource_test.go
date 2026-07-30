@@ -19,7 +19,7 @@ func TestEvalResource_HappyPath(t *testing.T) {
 	reporter := diagnostics.New(src)
 
 	evalResource(block, env, reporter)
-	cfg, _ := env.Registry.Resources.Lookup("app_server")
+	cfg, _ := env.Registry.Resources.lookup("app_server")
 	if reporter.HasErrors() {
 		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
 	}
@@ -50,7 +50,7 @@ func TestEvalResource_DuplicateNameFails(t *testing.T) {
 		t.Fatalf("expected duplicate-name diagnostic, got %+v", diags)
 	}
 
-	cfg2, _ := env.Registry.Resources.Lookup("app_server")
+	cfg2, _ := env.Registry.Resources.lookup("app_server")
 	if cfg2 == nil {
 		t.Fatal("expected the first resource to remain registered")
 	}
@@ -62,7 +62,7 @@ func TestEvalResource_DuplicateNameFails(t *testing.T) {
 func TestEvalResource_ProviderMetaAttributeResolves(t *testing.T) {
 	env := NewEnv()
 
-	env.Registry.Providers.Add(&ProviderConfig{
+	env.Registry.Providers.add(&ProviderConfig{
 		Name:  "aws",
 		Alias: "east",
 	})
@@ -75,7 +75,7 @@ func TestEvalResource_ProviderMetaAttributeResolves(t *testing.T) {
 }`)
 
 	evalResource(block, env, reporter)
-	cfg, _ := env.Registry.Resources.Lookup("app_server")
+	cfg, _ := env.Registry.Resources.lookup("app_server")
 
 	if reporter.HasErrors() {
 		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
@@ -102,19 +102,65 @@ func TestEvalResource_UndefinedProviderReported(t *testing.T) {
 	}
 }
 
+func TestEvalResource_ReferencesAnotherResource(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	vpcBlock := parseBlock(t, `resource aws_vpc as demo_vpc {
+  cidr_block = "10.0.0.0/16"
+}`)
+	evalResource(vpcBlock, env, reporter)
+
+	subnetBlock := parseBlock(t, `resource aws_subnet as public_subnet {
+  vpc_id     = demo_vpc.id
+  cidr_block = "10.0.0.0/24"
+}`)
+	evalResource(subnetBlock, env, reporter)
+
+	subnetCfg, _ := env.Registry.Resources.lookup("public_subnet")
+
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	vpcID := subnetCfg.Extra["vpc_id"]
+	if vpcID.Kind != KindRef || vpcID.Str != "aws_vpc.demo_vpc.id" {
+		t.Errorf("vpc_id = %+v, want KindRef aws_vpc.demo_vpc.id", vpcID)
+	}
+}
+
+func TestEvalResource_ForwardReferenceFails(t *testing.T) {
+	// Mirrors the provider forward-reference limitation: a resource can
+	// only reference resources declared BEFORE it, since the registry
+	// is built incrementally in file order.
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	subnetBlock := parseBlock(t, `resource aws_subnet as public_subnet {
+  vpc_id = demo_vpc.id
+}`)
+	evalResource(subnetBlock, env, reporter) // demo_vpc not registered yet
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected a forward-reference error")
+	}
+}
+
 func parseBlock(t *testing.T, src string) *parser.Block {
 	t.Helper()
 	r := diagnostics.New(src)
-	l := lexer.New(src, r)
-	p := parser.New(l.Tokens(), r)
+	scan := lexer.New(src, r)
+	p := parser.New(scan.Tokens(), r)
 	prog := p.ParseProgram()
 
-	for _, stmt := range prog.Statements {
-		block, ok := stmt.(*parser.Block)
-		if !ok {
-			continue
-		}
-		return block
+	if r.HasErrors() {
+		t.Fatalf("unexpected parse errors: %+v", r.Diagnostics())
 	}
-	return nil
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 top-level statement, got %d", len(prog.Statements))
+	}
+	block, ok := prog.Statements[0].(*parser.Block)
+	if !ok {
+		t.Fatalf("expected *ast.Block, got %T", prog.Statements[0])
+	}
+	return block
 }

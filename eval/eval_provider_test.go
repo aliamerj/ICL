@@ -8,31 +8,6 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
-// parseProviderBlock is a test helper: runs the real lexer + parser
-// and returns the first top-level *ast.Block, so eval tests exercise
-// the actual pipeline instead of hand-building AST nodes.
-func parseProviderBlock(t *testing.T, source string) (*parser.Block, *diagnostics.Reporter) {
-	t.Helper()
-
-	scan := lexer.New(source, diagnostics.New(source))
-	parseReporter := diagnostics.New(source)
-	p := parser.New(scan.Tokens(), parseReporter)
-	prog := p.ParseProgram()
-
-	if parseReporter.HasErrors() {
-		t.Fatalf("unexpected parse errors: %+v", parseReporter.Diagnostics())
-	}
-	if len(prog.Statements) != 1 {
-		t.Fatalf("expected 1 top-level statement, got %d", len(prog.Statements))
-	}
-
-	block, ok := prog.Statements[0].(*parser.Block)
-	if !ok {
-		t.Fatalf("expected *ast.Block, got %T", prog.Statements[0])
-	}
-	return block, parseReporter
-}
-
 func TestEvalProvider_HappyPath(t *testing.T) {
 	src := `provider aws {
   source  = "hashicorp/aws"
@@ -64,6 +39,67 @@ func TestEvalProvider_HappyPath(t *testing.T) {
 	}
 	if len(cfg.Extra) != 0 {
 		t.Errorf("expected no extra fields, got %+v", cfg.Extra)
+	}
+}
+
+func TestEvalProvider_DuplicateUnaliasedFails(t *testing.T) {
+	src1 := `provider aws { source = "a/a" version = "1.0" }`
+	src2 := `provider aws { source = "a/a" version = "2.0" }`
+
+	block1, _ := parseProviderBlock(t, src1)
+	block2, _ := parseProviderBlock(t, src2)
+	env := NewEnv()
+
+	evalReporter := diagnostics.New("")
+	evalProvider(block1, env, evalReporter)
+	evalProvider(block2, env, evalReporter)
+
+	cfg, looked := env.Registry.Providers.lookup("aws", "")
+	if !looked || cfg == nil {
+		t.Fatal("expected the first provider config to remain registered")
+	}
+	if !evalReporter.HasErrors() {
+		t.Fatal("expected a duplicate-provider error on the second block")
+	}
+}
+
+func TestEvalProvider_DifferentAliasesDoNotCollide(t *testing.T) {
+	src1 := `provider aws { source = "a/a" version = "1.0" alias = "east" }`
+	src2 := `provider aws { source = "a/a" version = "1.0" alias = "west" }`
+
+	block1, _ := parseProviderBlock(t, src1)
+	block2, _ := parseProviderBlock(t, src2)
+	env := NewEnv()
+
+	evalReporter := diagnostics.New("")
+	evalProvider(block1, env, evalReporter)
+	evalProvider(block2, env, evalReporter)
+
+	cfg1, looked1 := env.Registry.Providers.lookup("aws", "east")
+	cfg2, looked2 := env.Registry.Providers.lookup("aws", "west")
+	if evalReporter.HasErrors() || !looked1 || !looked2 || cfg1 == nil || cfg2 == nil {
+		t.Fatalf("east and west aliases should not collide, got errors: %+v", evalReporter.Diagnostics())
+	}
+}
+
+func TestEvalProvider_DuplicateAliasedFails(t *testing.T) {
+	src1 := `provider aws { source = "a/a" version = "1.0" alias = "east" }`
+	src2 := `provider aws { source = "a/a" version = "2.0" alias = "east" }`
+
+	block1, _ := parseProviderBlock(t, src1)
+	block2, _ := parseProviderBlock(t, src2)
+	env := NewEnv()
+
+	evalReporter := diagnostics.New("")
+	evalProvider(block1, env, evalReporter)
+	evalProvider(block2, env, evalReporter)
+
+	cfg, looked := env.Registry.Providers.lookup("aws", "east")
+	if !looked || cfg == nil {
+		t.Fatal("expected the first aliased provider config to remain registered")
+	}
+	if !evalReporter.HasErrors() {
+		t.Fatal("expected a duplicate-provider error for the repeated alias")
 	}
 }
 
@@ -261,4 +297,26 @@ func TestEvalProvider_AllowedAccountIdsAndAssumeRole(t *testing.T) {
 	if !ok || role.Kind != KindObject || role.Object["role_arn"].Str != "arn:aws:iam::123456789012:role/deploy" {
 		t.Errorf("assume_role = %+v", role)
 	}
+}
+
+func parseProviderBlock(t *testing.T, source string) (*parser.Block, *diagnostics.Reporter) {
+	t.Helper()
+
+	scan := lexer.New(source, diagnostics.New(source))
+	parseReporter := diagnostics.New(source)
+	p := parser.New(scan.Tokens(), parseReporter)
+	prog := p.ParseProgram()
+
+	if parseReporter.HasErrors() {
+		t.Fatalf("unexpected parse errors: %+v", parseReporter.Diagnostics())
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 top-level statement, got %d", len(prog.Statements))
+	}
+
+	block, ok := prog.Statements[0].(*parser.Block)
+	if !ok {
+		t.Fatalf("expected *ast.Block, got %T", prog.Statements[0])
+	}
+	return block, parseReporter
 }

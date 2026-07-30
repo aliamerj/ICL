@@ -31,7 +31,7 @@ func evalResource(block *parser.Block, env *Environment, reporter *diagnostics.R
 	}
 
 	name := block.Name.Name
-	if env.Registry.Resources.Has(name) {
+	if env.Registry.Resources.has(name) {
 		reporter.ErrorAtOffsetWithCode(block.Name.Rng.Start.Offset, diagnostics.DUPLICATE_NAME,
 			fmt.Sprintf("%q is already declared", name),
 			"every resource, lookup, and input must have a unique name across the whole file")
@@ -64,5 +64,5 @@ func evalResource(block *parser.Block, env *Environment, reporter *diagnostics.R
 		cfg.Extra[attr.Name.Name] = val
 
 	}
-	env.Registry.Resources.Add(cfg)
+	env.Registry.Resources.add(cfg)
 }

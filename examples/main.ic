@@ -2,22 +2,30 @@ provider aws {
   source  = "hashicorp/aws"
   version = "5.37.0"
   region  = "eu-west-1"
+}
 
-  allowed_account_ids = ["123456789012"]
-
-  assume_role = {
-    role_arn = "arn:aws:iam::123456789012:role/deploy"
+resource aws_vpc as demo_vpc {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "Terraform VPC"
   }
 }
 
-provider aws {
-  source = "hashicorp/aws"
-  version = "5.37.0"
-  alias  = "east"
-  region = aws.region
+resource aws_subnet as public_subnet {
+  vpc_id     = demo_vpc.id
+  cidr_block = "10.0.0.0/24"
 }
 
-provider random {
-  source  = "hashicorp/random"
-  version = "~> 3.0"
+resource aws_internet_gateway as igw {
+  vpc_id = demo_vpc.id
+}
+
+resource aws_route_table as public_rtb {
+  vpc_id = demo_vpc.id
+}
+
+resource aws_route as default_route {
+  route_table_id         = public_rtb.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = igw.id
 }

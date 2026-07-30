@@ -14,8 +14,13 @@ type providerRegistry struct {
 }
 
 
-func (r *providerRegistry) Add(cfg *ProviderConfig) {
+func (r *providerRegistry) add(cfg *ProviderConfig) {
 	r.Instances[registryKey(cfg.Name, cfg.Alias)] = cfg
+}
+
+func (r *providerRegistry) has(typ, alias string) bool {
+  _, ok := r.Instances[registryKey(typ, alias)]
+	return ok
 }
 
 func registryKey(name, alias string) string {
