@@ -21,6 +21,9 @@ func NewEnv() *Environment {
 			Resources: &resourceRegistry{
 				Instances: make(map[string]*ResourceConfig),
 			},
+			Vars: &varRegistry{
+				Instances: make(map[string]*VarConfig),
+			},
 		},
 	}
 }

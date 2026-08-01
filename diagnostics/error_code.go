@@ -21,6 +21,8 @@ const (
 	UNSUPPORTED_EXPRESSION errorCode = "E0204"
 	UNDEFINED_REFERENCE    errorCode = "E0205"
 	DIVISION_BY_ZERO       errorCode = "E0206"
+	INVALID_TYPE           errorCode = "E0207"
+	INVALID_FIELD_ACCESS   errorCode = "E0208"
 
 	INVALID_REFERENCE      errorCode = "E0210"
 	INVALID_PROVIDER_REF   errorCode = "E0211"

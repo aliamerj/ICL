@@ -14,6 +14,7 @@ type Document struct {
 	Provider  map[string]any            `json:"provider,omitempty"`
 	Resource  map[string]map[string]any `json:"resource,omitempty"`
 	Data      map[string]map[string]any `json:"data,omitempty"`
+	Variable  map[string]any            `json:"variable,omitempty"`
 }
 
 type TerraformBlock struct {
@@ -43,8 +44,25 @@ func Marshal(env *eval.Environment) ([]byte, error) {
 		return nil, err
 	}
 	buildResources(doc, env.Registry.Resources.Instances)
-
+	buildVars(doc, env.Registry.Vars.Instances)
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+func buildVars(doc *Document, vars map[string]*eval.VarConfig) {
+	if len(vars) == 0 {
+		return
+	}
+	doc.Variable = map[string]any{}
+	for _, v := range vars {
+		entry := map[string]any{"type": v.Type}
+		if v.Description != "" {
+			entry["description"] = v.Description
+		}
+		if v.HasDefault {
+			entry["default"] = v.Default.Native()
+		}
+		doc.Variable[v.Name] = entry
+	}
 }
 
 func buildProviders(doc *Document, providers map[string]*eval.ProviderConfig) error {

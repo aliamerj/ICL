@@ -16,7 +16,17 @@ type ProviderConfig struct {
 	Extra   map[string]Value // anything else the user set, kept for forward-compat
 }
 
-func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.Reporter)  {
+func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.Reporter) {
+	if block.Body == nil {
+		reporter.ErrorAtOffsetWithCode(
+			block.Rng.Start.Offset,
+			diagnostics.INVALID_PROVIDER_BLOCK,
+			"provider block is missing a body",
+			"add `{ ... }` to the block",
+		)
+		return
+	}
+
 	if len(block.Labels) != 1 {
 		reporter.ErrorAtOffsetWithCode(
 			block.Rng.Start.Offset,
@@ -70,7 +80,7 @@ func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 			}
 			cfg.Version = val.Str
 
-		case "alias": 
+		case "alias":
 			if val.Kind != KindString {
 				reporter.ErrorAtOffsetWithCode(
 					attr.Value.Range().Start.Offset,
@@ -95,7 +105,7 @@ func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 		)
 	}
 
-  	// Duplicate check now runs here, with real position info, catching
+	// Duplicate check now runs here, with real position info, catching
 	// both the plain case (two `provider aws {}`) and the aliased case
 	// (two `provider aws { alias = "east" }`) — checked only once
 	// Type+Alias are both fully known.
@@ -106,5 +116,5 @@ func evalProvider(block *parser.Block, env *Environment, reporter *diagnostics.R
 		return
 	}
 
-  env.Registry.Providers.add(cfg)
+	env.Registry.Providers.add(cfg)
 }

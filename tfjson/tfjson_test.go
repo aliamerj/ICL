@@ -260,6 +260,64 @@ func TestMarshal_ProducesResourcesAndProviders(t *testing.T) {
 	}
 }
 
+func TestMarshal_VarReferenceStaysDeferred(t *testing.T) {
+	env := eval.NewEnv()
+	env.Registry.Vars.Instances = map[string]*eval.VarConfig{
+		"curr_bucket_name": {
+			Name:       "curr_bucket_name",
+			Type:       "string",
+			HasDefault: true,
+			Default:    eval.StringValue("my_default_bucket_name"),
+		},
+	}
+	env.Registry.Resources.Instances = map[string]*eval.ResourceConfig{
+		"my_bucket": {
+			Type: "aws_s3_bucket",
+			Name: "my_bucket",
+			Extra: map[string]eval.Value{
+				"bucket": eval.RefValue("var.curr_bucket_name"),
+			},
+		},
+	}
+
+	out, err := Marshal(env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
+	}
+	resourceBlock, ok := parsed["resource"].(map[string]any)
+	if !ok {
+		t.Fatal("missing top-level resource block")
+	}
+	bucketType, ok := resourceBlock["aws_s3_bucket"].(map[string]any)
+	if !ok {
+		t.Fatal("missing resource.aws_s3_bucket")
+	}
+	myBucket, ok := bucketType["my_bucket"].(map[string]any)
+	if !ok {
+		t.Fatal("missing resource.aws_s3_bucket.my_bucket")
+	}
+	if myBucket["bucket"] != "${var.curr_bucket_name}" {
+		t.Fatalf("bucket = %v, want ${var.curr_bucket_name}", myBucket["bucket"])
+	}
+
+	variableBlock, ok := parsed["variable"].(map[string]any)
+	if !ok {
+		t.Fatal("missing top-level variable block")
+	}
+	currBucket, ok := variableBlock["curr_bucket_name"].(map[string]any)
+	if !ok {
+		t.Fatal("missing variable.curr_bucket_name")
+	}
+	if currBucket["default"] != "my_default_bucket_name" {
+		t.Fatalf("variable default = %v, want my_default_bucket_name", currBucket["default"])
+	}
+}
+
 func TestMarshal_NoProvidersProducesMinimalDocument(t *testing.T) {
 	out, err := Marshal(eval.NewEnv())
 	if err != nil {

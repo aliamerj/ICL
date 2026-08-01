@@ -14,7 +14,7 @@ func parseProvider(t *testing.T, input string) *Block {
 	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
-	block := p.parseBlock(tokens.PROVIDER)
+	block := p.parseBlock()
 	if block == nil {
 		t.Fatal("expected provider block")
 	}
@@ -156,7 +156,7 @@ provider {
 	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
-	block := p.parseBlock(tokens.PROVIDER)
+	block := p.parseBlock()
 
 	if block != nil {
 		t.Fatal("expected nil")
@@ -173,7 +173,7 @@ provider aws
 `
 	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
-	block := p.parseBlock(tokens.PROVIDER)
+	block := p.parseBlock()
 
 	if block != nil {
 		t.Fatal("expected nil")
@@ -193,7 +193,7 @@ provider aws {
 	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
-	block := p.parseBlock(tokens.PROVIDER)
+	block := p.parseBlock()
 
 	if block != nil {
 		t.Fatal("expected nil")
@@ -213,7 +213,7 @@ provider aws {
 	l := lexer.New(input, diagnostics.New(input))
 	p := New(l.Tokens(), diagnostics.New(input))
 
-	block := p.parseBlock(tokens.PROVIDER)
+	block := p.parseBlock()
 
 	if block != nil {
 		t.Fatal("expected nil")

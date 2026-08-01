@@ -59,6 +59,16 @@ func evalDeclaration(kind DeclKind, keyword string, block *parser.Block, env *En
 		Name:  name,
 		Extra: map[string]Value{},
 	}
+	if block.Body == nil {
+		reporter.ErrorAtOffsetWithCode(
+			block.Rng.Start.Offset,
+			diagnostics.INVALID_RESOURCE_BLOCK,
+			fmt.Sprintf("%s block is missing a body", keyword),
+			"add `{ ... }` to the block",
+		)
+		return
+	}
+
 	for _, stmt := range block.Body.Statements {
 		attr, ok := stmt.(*parser.Attribute)
 		if !ok {

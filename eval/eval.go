@@ -8,17 +8,18 @@ import (
 
 func Run(env *Environment, prog *parser.Program, reporter *diagnostics.Reporter) {
 	for _, stmt := range prog.Statements {
-		block, ok := stmt.(*parser.Block)
-		if !ok {
-			continue
-		}
-		switch block.Keyword {
-		case tokens.PROVIDER:
-			evalProvider(block, env, reporter)
-		case tokens.RESOURCE:
-			evalResource(block, env, reporter)
-		case tokens.LOOKUP:
-			evalLookup(block, env, reporter)
+		switch s := stmt.(type) {
+		case *parser.Block:
+			switch s.Keyword {
+			case tokens.PROVIDER:
+				evalProvider(s, env, reporter)
+			case tokens.RESOURCE:
+				evalResource(s, env, reporter)
+			case tokens.LOOKUP:
+				evalLookup(s, env, reporter)
+			}
+		case *parser.VarDecl:
+			evalVar(s, env, reporter)
 		}
 	}
 }

@@ -24,21 +24,15 @@ func (p *parser) ParseProgram() *Program {
 
 	for p.cur().Type != tokens.EOF {
 		switch p.cur().Type {
-		case tokens.PROVIDER:
-			if block := p.parseBlock(tokens.PROVIDER); block != nil {
+		case tokens.PROVIDER, tokens.RESOURCE, tokens.LOOKUP:
+			if block := p.parseBlock(); block != nil {
 				prog.Statements = append(prog.Statements, block)
 			} else {
 				p.synchronize()
 			}
-		case tokens.RESOURCE:
-			if block := p.parseBlock(tokens.RESOURCE); block != nil {
-				prog.Statements = append(prog.Statements, block)
-			} else {
-				p.synchronize()
-			}
-		case tokens.LOOKUP:
-			if block := p.parseBlock(tokens.LOOKUP); block != nil {
-				prog.Statements = append(prog.Statements, block)
+		case tokens.VAR:
+			if varBlock := p.parseVarDecl(); varBlock != nil {
+				prog.Statements = append(prog.Statements, varBlock)
 			} else {
 				p.synchronize()
 			}

@@ -7,4 +7,6 @@ var keywords = map[string]tokens.Type{
 	"resource": tokens.RESOURCE,
 	"as":       tokens.AS,
 	"lookup":   tokens.LOOKUP,
+	"is":       tokens.IS,
+	"var":      tokens.VAR,
 }

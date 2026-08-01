@@ -42,6 +42,8 @@ const (
   RESOURCE
   AS
   LOOKUP
+  VAR
+  IS
 
 	EOF
 )

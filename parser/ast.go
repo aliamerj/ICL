@@ -157,3 +157,14 @@ type MemberExpr struct {
 
 func (m *MemberExpr) Range() rangePos { return m.Rng }
 func (m *MemberExpr) expressionNode() {}
+
+type VarDecl struct {
+	Name    *Identifier
+	Type    *Identifier
+	Default Expression // nil if bare or body form
+	Body    *Body      // nil if bare or shorthand form
+	Rng     rangePos
+}
+
+func (v *VarDecl) statementNode()  {}
+func (v *VarDecl) Range() rangePos { return v.Rng }

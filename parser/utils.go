@@ -46,3 +46,51 @@ func spanOf(start, end lexer.Token) rangePos {
 		End:   pos{Line: end.Line, Offset: end.Offset + len(end.Lexeme)},
 	}
 }
+
+func (p *parser) parseBody() *Body {
+	body := &Body{}
+
+	for p.cur().Type != tokens.RIGHT_BRACE && p.cur().Type != tokens.EOF {
+		attr := p.parseAttribute()
+		if attr == nil {
+			return nil
+		}
+		body.Statements = append(body.Statements, attr)
+	}
+	return body
+}
+
+func (p *parser) parseAttribute() *Attribute {
+	keyTok, ok := p.expectAttributeKey()
+	if !ok {
+		return nil
+	}
+	if _, ok := p.expect(tokens.EQUAL); !ok {
+		return nil
+	}
+
+	value := p.parseExpression()
+	if value == nil {
+		return nil
+	}
+
+	return &Attribute{
+		Name:  &Identifier{Name: keyTok.Lexeme, Rng: rangeOf(keyTok)},
+		Value: value,
+		Rng:   rangePos{Start: rangeOf(keyTok).Start, End: value.Range().End},
+	}
+}
+
+func (p *parser) expectAttributeKey() (lexer.Token, bool) {
+	tok := p.cur()
+	if tok.Type == tokens.IDENTIFIER || tok.Type == tokens.PROVIDER || tok.Type == tokens.RESOURCE {
+		return p.advance(), true
+	}
+	p.reporter.ErrorAtOffsetWithCode(
+		tok.Offset,
+		diagnostics.UNEXPECTED_TOKEN,
+		fmt.Sprintf("expected an attribute name, found %q", tok.Lexeme),
+		"",
+	)
+	return lexer.Token{}, false
+}

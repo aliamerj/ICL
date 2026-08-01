@@ -10,38 +10,65 @@ import (
 )
 
 func evalMemberExpr(m *parser.MemberExpr, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
-	if base, ok := m.Object.(*parser.Identifier); ok {
-		// Resource reference: demo_vpc.id — deferred, ICL can never know
-		// this value, so preserve it as a Terraform-side reference rather
-		// than trying to resolve it.
-		if resCfg, found := env.Registry.Resources.lookup(base.Name); found {
-			addr := fmt.Sprintf("%s.%s.%s", resCfg.Type, resCfg.Name, m.Property)
-			if resCfg.Kind == KindLookup {
-				addr = fmt.Sprintf("data.%s.%s.%s", resCfg.Type, resCfg.Name, m.Property)
-			}
-			return RefValue(addr), true
-		}
-		// Provider field reference: aws.region — resolved right now,
-		// since the user already typed the literal value.
-		if len(env.Registry.Providers.instancesOf(base.Name)) > 0 {
-			return resolveProviderField(base.Name, "", m.Property, m, env, reporter)
-		}
-
-		reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.UNDEFINED_REFERENCE,
-			fmt.Sprintf("undefined reference %q — no resource or provider with that name", base.Name), "")
+	root, props, ok := flattenMemberChain(m)
+	if !ok || len(props) == 0 {
+		reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
+			"unrecognized reference shape", "")
 		return Value{}, false
 	}
 
-	// aws.east.region — always a provider chain; resource references are
-	// always exactly two segments (name.property), never three.
-	if inner, ok := m.Object.(*parser.MemberExpr); ok {
-		if typeIdent, ok := inner.Object.(*parser.Identifier); ok {
-			return resolveProviderField(typeIdent.Name, inner.Property, m.Property, m, env, reporter)
+	if resCfg, found := env.Registry.Resources.lookup(root); found {
+		prefix := resCfg.Type + "." + resCfg.Name
+		if resCfg.Kind == KindLookup {
+			prefix = "data." + prefix
+		}
+		return RefValue(prefix + "." + strings.Join(props, ".")), true
+	}
+
+	if varCfg, found := env.Registry.Vars.lookup(root); found {
+		if varCfg.Type != "object" && varCfg.Type != "any" {
+			reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.INVALID_FIELD_ACCESS,
+				fmt.Sprintf("cannot access field %q on var %q of type %q", props[0], root, varCfg.Type),
+				"field access is only valid on object-typed vars")
+			return Value{}, false
+		}
+		if !validateVarFieldPath(varCfg, props, m, reporter) {
+			return Value{}, false
+		}
+		return RefValue("var." + root + "." + strings.Join(props, ".")), true
+	}
+
+	if len(env.Registry.Providers.instancesOf(root)) > 0 {
+		switch len(props) {
+		case 1:
+			return resolveProviderField(root, "", props[0], m, env, reporter)
+		case 2:
+			return resolveProviderField(root, props[0], props[1], m, env, reporter)
+		default:
+			reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
+				fmt.Sprintf("too many segments in provider reference %q", root), "")
+			return Value{}, false
 		}
 	}
-	reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
-		"unrecognized reference shape", "")
+
+	reporter.ErrorAtOffsetWithCode(m.Range().Start.Offset, diagnostics.UNDEFINED_REFERENCE,
+		fmt.Sprintf("undefined reference %q — no resource, lookup, var, or provider with that name", root), "")
 	return Value{}, false
+}
+
+func flattenMemberChain(expr parser.Expression) (root string, properties []string, ok bool) {
+	switch e := expr.(type) {
+	case *parser.Identifier:
+		return e.Name, nil, true
+	case *parser.MemberExpr:
+		base, props, ok := flattenMemberChain(e.Object)
+		if !ok {
+			return "", nil, false
+		}
+		return base, append(props, e.Property), true
+	default:
+		return "", nil, false
+	}
 }
 
 func resolveProviderField(name, alias, field string, node parser.Expression, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
@@ -97,6 +124,41 @@ func qualifiedNames(typ string, aliases []string) []string {
 func fieldNames(extra map[string]Value) []string {
 	names := make([]string, 0, len(extra))
 	for k := range extra {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func validateVarFieldPath(varCfg *VarConfig, props []string, node parser.Expression, reporter *diagnostics.Reporter) bool {
+	if !varCfg.HasDefault {
+		return true
+	}
+
+	current := varCfg.Default
+	for i, prop := range props {
+		if current.Kind != KindObject {
+			reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_FIELD_ACCESS,
+				fmt.Sprintf("cannot access field %q — %q is a %s, not an object",
+					prop, strings.Join(props[:i], "."), current.Kind),
+				fmt.Sprintf("var %q's default at this path is: %s", varCfg.Name, current.Kind))
+			return false
+		}
+		next, ok := current.Object[prop]
+		if !ok {
+			reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_FIELD,
+				fmt.Sprintf("var %q has no field %q", varCfg.Name, strings.Join(props[:i+1], ".")),
+				fmt.Sprintf("available fields: %s", strings.Join(objectFieldNames(current.Object), ", ")))
+			return false
+		}
+		current = next
+	}
+	return true
+}
+
+func objectFieldNames(obj map[string]Value) []string {
+	names := make([]string, 0, len(obj))
+	for k := range obj {
 		names = append(names, k)
 	}
 	sort.Strings(names)

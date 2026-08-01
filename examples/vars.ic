@@ -1,0 +1,7 @@
+var curr_bucket = {
+  name = "my_default_bucket_name"
+}
+
+resource aws_s3_bucket as my_bucket {
+  bucket = curr_bucket.name
+}
