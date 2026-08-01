@@ -17,6 +17,8 @@ func Run(env *Environment, prog *parser.Program, reporter *diagnostics.Reporter)
 			evalProvider(block, env, reporter)
 		case tokens.RESOURCE:
 			evalResource(block, env, reporter)
+		case tokens.LOOKUP:
+			evalLookup(block, env, reporter)
 		}
 	}
 }

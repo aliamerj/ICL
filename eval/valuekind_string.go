@@ -15,11 +15,12 @@ func _() {
 	_ = x[KindNull-4]
 	_ = x[KindList-5]
 	_ = x[KindObject-6]
+	_ = x[KindRef-7]
 }
 
-const _ValueKind_name = "KindStringKindIntKindFloatKindBoolKindNullKindListKindObject"
+const _ValueKind_name = "KindStringKindIntKindFloatKindBoolKindNullKindListKindObjectKindRef"
 
-var _ValueKind_index = [...]uint8{0, 10, 17, 26, 34, 42, 50, 60}
+var _ValueKind_index = [...]uint8{0, 10, 17, 26, 34, 42, 50, 60, 67}
 
 func (i ValueKind) String() string {
 	idx := int(i) - 0

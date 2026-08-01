@@ -147,9 +147,7 @@ func TestBuildResources_SerializesNestedValues(t *testing.T) {
 		},
 	}
 
-	if err := buildResources(doc, resources); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	buildResources(doc, resources)
 
 	appServer, ok := doc.Resource["aws_instance"]["app_server"].(map[string]any)
 	if !ok {

@@ -145,6 +145,209 @@ func TestEvalResource_ForwardReferenceFails(t *testing.T) {
 	}
 }
 
+func TestEvalLookup_HappyPath(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	block := parseBlock(t, `lookup aws_ami as ubuntu {
+  most_recent = true
+  owners      = ["099720109477"]
+  filter = {
+    name   = "name"
+    values = ["ubuntu-*"]
+  }
+}`)
+	evalLookup(block, env, reporter)
+
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+
+	cfg, _ := env.Registry.Resources.lookup("ubuntu")
+	if cfg.Kind != KindLookup {
+		t.Errorf("Kind = %v, want KindLookup", cfg.Kind)
+	}
+	if cfg.Type != "aws_ami" || cfg.Name != "ubuntu" {
+		t.Errorf("cfg = %+v", cfg)
+	}
+	if cfg.Extra["most_recent"].Bool != true {
+		t.Errorf("Extra[most_recent] = %+v, want true", cfg.Extra["most_recent"])
+	}
+	owners := cfg.Extra["owners"]
+	if owners.Kind != KindList || owners.List[0].Str != "099720109477" {
+		t.Errorf("Extra[owners] = %+v", owners)
+	}
+	filter := cfg.Extra["filter"]
+	if filter.Kind != KindObject || filter.Object["name"].Str != "name" {
+		t.Errorf("Extra[filter] = %+v", filter)
+	}
+}
+
+func TestEvalLookup_MissingNameOrLabelReportsError(t *testing.T) {
+	// Guards evalDeclaration's own invariant checks, independent of the
+	// parser already enforcing them — same defensive posture as EvalResource.
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	badBlock := parseBlock(t, `lookup aws_ami as ubuntu {}`)
+	badBlock.Name = nil // simulate the invariant being violated directly
+
+	evalLookup(badBlock, env, reporter)
+
+	cfg, _ := env.Registry.Resources.lookup("ubuntu")
+	if !reporter.HasErrors() || cfg != nil {
+		t.Fatal("expected an error and nil config when Name is missing")
+	}
+}
+
+func TestEvalLookup_ProviderMetaAttributeResolves(t *testing.T) {
+	env := NewEnv()
+	env.Registry.Providers.add(&ProviderConfig{Name: "aws", Alias: "east"})
+	reporter := diagnostics.New("")
+
+	block := parseBlock(t, `lookup aws_ami as ubuntu {
+  most_recent = true
+  provider    = aws.east
+}`)
+	evalLookup(block, env, reporter)
+
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	cfg, _ := env.Registry.Resources.lookup("ubuntu")
+	if cfg.Provider != "aws.east" {
+		t.Errorf("cfg.Provider = %q, want aws.east", cfg.Provider)
+	}
+	if _, exists := cfg.Extra["provider"]; exists {
+		t.Error("provider should not leak into Extra")
+	}
+}
+
+// --- Flat namespace: resource and lookup share ONE registry ---
+
+func TestEvalLookup_NameCollidesWithResource(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	resourceBlock := parseBlock(t, `resource aws_instance as ubuntu {
+  ami = "ami-123"
+}`)
+	lookupBlock := parseBlock(t, `lookup aws_ami as ubuntu {
+  most_recent = true
+}`)
+
+	evalResource(resourceBlock, env, reporter)
+	evalLookup(lookupBlock, env, reporter)
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected a duplicate-name error: 'ubuntu' already used by a resource")
+	}
+
+	cfg, _ := env.Registry.Resources.lookup("ubuntu")
+	if cfg == nil {
+		t.Fatal("expected the original resource to remain registered")
+	}
+	if cfg.Kind != KindResource || cfg.Type != "aws_instance" {
+		t.Fatalf("expected the resource declaration to win, got %+v", cfg)
+	}
+}
+
+func TestEvalLookup_NameCollidesWithAnotherLookup(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	b1 := parseBlock(t, `lookup aws_ami as ubuntu { most_recent = true }`)
+	b2 := parseBlock(t, `lookup aws_ami as ubuntu { most_recent = false }`)
+
+	evalLookup(b1, env, reporter)
+	evalLookup(b2, env, reporter)
+
+	cfg, _ := env.Registry.Resources.lookup("ubuntu")
+	if !reporter.HasErrors() {
+		t.Fatal("expected a duplicate-name error for the second lookup")
+	}
+	if cfg == nil {
+		t.Fatal("expected the first lookup to remain registered")
+	}
+	if cfg.Kind != KindLookup || cfg.Extra["most_recent"].Bool != true {
+		t.Fatalf("expected the first lookup to remain registered, got %+v", cfg)
+	}
+}
+
+// --- Reference resolution: the actual point of this session ---
+
+func TestEval_LookupReferenceUsesDataPrefix(t *testing.T) {
+env := NewEnv()
+	env.Registry.Resources.add(&ResourceConfig{Kind: KindLookup, Type: "aws_ami", Name: "ubuntu"})
+
+	v, ok := eval(memberExpr("ubuntu", "id"), env, diagnostics.New(""))
+	if !ok {
+		t.Fatal("expected success")
+	}
+	if v.Kind != KindRef {
+		t.Fatalf("Kind = %v, want KindRef", v.Kind)
+	}
+	if v.Str != "data.aws_ami.ubuntu.id" {
+		t.Errorf("Str = %q, want data.aws_ami.ubuntu.id", v.Str)
+	}
+}
+
+func TestEval_ResourceReferenceStillHasNoDataPrefix(t *testing.T) {
+	// Regression: confirms the Kind branch didn't accidentally apply
+	// "data." to plain resources too.
+		env := NewEnv()
+	env.Registry.Resources.add(&ResourceConfig{Kind: KindResource, Type: "aws_vpc", Name: "demo_vpc"})
+
+	v, ok := eval(memberExpr("demo_vpc", "id"), env, diagnostics.New(""))
+	if !ok || v.Str != "aws_vpc.demo_vpc.id" {
+		t.Fatalf("got %+v, ok=%v, want aws_vpc.demo_vpc.id (no data. prefix)", v, ok)
+	}
+}
+
+func TestEvalResource_ReferencesLookupResult(t *testing.T) {
+	// Integration: the real AMI-lookup-into-instance case, end to end
+	// through the actual parser, exactly like the file that passed
+	// tofu validate.
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	lookupBlock := parseBlock(t, `lookup aws_ami as ubuntu {
+  most_recent = true
+}`)
+	evalLookup(lookupBlock, env, reporter)
+
+	resourceBlock := parseBlock(t, `resource aws_instance as app_server {
+  ami           = ubuntu.id
+  instance_type = "t2.micro"
+}`)
+	evalResource(resourceBlock, env, reporter)
+
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	
+  resCfg, _ := env.Registry.Resources.lookup("app_server")
+
+	ami := resCfg.Extra["ami"]
+	if ami.Kind != KindRef || ami.Str != "data.aws_ami.ubuntu.id" {
+		t.Errorf("ami = %+v, want KindRef data.aws_ami.ubuntu.id", ami)
+	}
+}
+
+func TestEvalLookup_ForwardReferenceFails(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	resourceBlock := parseBlock(t, `resource aws_instance as app_server {
+  ami = ubuntu.id
+}`)
+	evalResource(resourceBlock, env, reporter) // 'ubuntu' lookup not declared yet
+
+	if !reporter.HasErrors() {
+		t.Fatal("expected a forward-reference error")
+	}
+}
+
 func parseBlock(t *testing.T, src string) *parser.Block {
 	t.Helper()
 	r := diagnostics.New(src)

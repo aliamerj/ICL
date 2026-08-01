@@ -36,6 +36,12 @@ func (p *parser) ParseProgram() *Program {
 			} else {
 				p.synchronize()
 			}
+		case tokens.LOOKUP:
+			if block := p.parseBlock(tokens.LOOKUP); block != nil {
+				prog.Statements = append(prog.Statements, block)
+			} else {
+				p.synchronize()
+			}
 		default:
 			p.reporter.ErrorAtOffsetWithCode(
 				p.cur().Offset,

@@ -41,6 +41,7 @@ const (
 	PROVIDER
   RESOURCE
   AS
+  LOOKUP
 
 	EOF
 )

@@ -26,7 +26,7 @@ func (p *parser) parseBlock(keyword tokens.Type) *Block {
 			return nil
 		}
 		name = &Identifier{Name: nameTok.Lexeme, Rng: rangeOf(nameTok)}
-	} else if keyword == tokens.RESOURCE {
+	} else if keyword == tokens.RESOURCE || keyword == tokens.LOOKUP {
 		// controls whether a missing `as name`
 		p.reporter.ErrorAtOffsetWithCode(
 			p.cur().Offset,
@@ -35,7 +35,6 @@ func (p *parser) parseBlock(keyword tokens.Type) *Block {
 			fmt.Sprintf("add `as <name>`, e.g. `%s %s as my_%s`", keyword, labelTok.Lexeme, keyword),
 		)
 		return nil
-
 	}
 
 	if _, ok := p.expect(tokens.LEFT_BRACE); !ok {

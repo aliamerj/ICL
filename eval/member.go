@@ -16,6 +16,9 @@ func evalMemberExpr(m *parser.MemberExpr, env *Environment, reporter *diagnostic
 		// than trying to resolve it.
 		if resCfg, found := env.Registry.Resources.lookup(base.Name); found {
 			addr := fmt.Sprintf("%s.%s.%s", resCfg.Type, resCfg.Name, m.Property)
+			if resCfg.Kind == KindLookup {
+				addr = fmt.Sprintf("data.%s.%s.%s", resCfg.Type, resCfg.Name, m.Property)
+			}
 			return RefValue(addr), true
 		}
 		// Provider field reference: aws.region — resolved right now,
@@ -29,7 +32,7 @@ func evalMemberExpr(m *parser.MemberExpr, env *Environment, reporter *diagnostic
 		return Value{}, false
 	}
 
-  // aws.east.region — always a provider chain; resource references are
+	// aws.east.region — always a provider chain; resource references are
 	// always exactly two segments (name.property), never three.
 	if inner, ok := m.Object.(*parser.MemberExpr); ok {
 		if typeIdent, ok := inner.Object.(*parser.Identifier); ok {

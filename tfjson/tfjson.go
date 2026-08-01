@@ -13,6 +13,7 @@ type Document struct {
 	Terraform *TerraformBlock           `json:"terraform,omitempty"`
 	Provider  map[string]any            `json:"provider,omitempty"`
 	Resource  map[string]map[string]any `json:"resource,omitempty"`
+	Data      map[string]map[string]any `json:"data,omitempty"`
 }
 
 type TerraformBlock struct {
@@ -41,9 +42,7 @@ func Marshal(env *eval.Environment) ([]byte, error) {
 	if err := buildProviders(doc, env.Registry.Providers.Instances); err != nil {
 		return nil, err
 	}
-	if err := buildResources(doc, env.Registry.Resources.Instances); err != nil {
-		return nil, err
-	}
+	buildResources(doc, env.Registry.Resources.Instances)
 
 	return json.MarshalIndent(doc, "", "  ")
 }
@@ -171,30 +170,35 @@ func providerInstancesByType(providers map[string]*eval.ProviderConfig, typ stri
 	return instances
 }
 
-func buildResources(doc *Document, resources map[string]*eval.ResourceConfig) error {
-	if len(resources) == 0 {
-		return nil
-	}
+func buildResources(doc *Document, resources map[string]*eval.ResourceConfig) {
+	buildResourceLike(&doc.Resource, resources, eval.KindResource)
+	buildResourceLike(&doc.Data, resources, eval.KindLookup)
+}
 
-	types := resourceTypes(resources)
-	doc.Resource = make(map[string]map[string]any, len(types))
+func buildResourceLike(
+	target *map[string]map[string]any,
+	resources map[string]*eval.ResourceConfig,
+	kind eval.DeclKind,
+) {
+	grouped := make(map[string]map[string]any)
 
-	for _, typ := range types {
-		entries := resourceInstancesByType(resources, typ)
-		resourceBlock := make(map[string]any, len(entries))
-		for _, r := range entries {
-			if r == nil {
-				continue
-			}
-			resourceBlock[r.Name] = resourceAttributes(r)
+	for _, r := range resources {
+		if r == nil || r.Kind != kind {
+			continue
 		}
-		doc.Resource[typ] = resourceBlock
+
+		block, ok := grouped[r.Type]
+		if !ok {
+			block = make(map[string]any)
+			grouped[r.Type] = block
+		}
+
+		block[r.Name] = resourceAttributes(r)
 	}
 
-	if len(doc.Resource) == 0 {
-		doc.Resource = nil
+	if len(grouped) != 0 {
+		*target = grouped
 	}
-	return nil
 }
 
 func resourceAttributes(r *eval.ResourceConfig) map[string]any {
@@ -206,34 +210,4 @@ func resourceAttributes(r *eval.ResourceConfig) map[string]any {
 		attrs["provider"] = r.Provider
 	}
 	return attrs
-}
-
-func resourceTypes(resources map[string]*eval.ResourceConfig) []string {
-	types := make(map[string]struct{}, len(resources))
-	for _, r := range resources {
-		if r == nil {
-			continue
-		}
-		types[r.Type] = struct{}{}
-	}
-
-	out := make([]string, 0, len(types))
-	for typ := range types {
-		out = append(out, typ)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func resourceInstancesByType(resources map[string]*eval.ResourceConfig, typ string) []*eval.ResourceConfig {
-	instances := make([]*eval.ResourceConfig, 0, len(resources))
-	for _, r := range resources {
-		if r != nil && r.Type == typ {
-			instances = append(instances, r)
-		}
-	}
-	sort.Slice(instances, func(i, j int) bool {
-		return instances[i].Name < instances[j].Name
-	})
-	return instances
 }

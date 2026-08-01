@@ -746,3 +746,154 @@ resource aws_instance as app_server {
 		t.Errorf("recovered block is wrong: %+v", block)
 	}
 }
+
+func TestParseLookup_HappyPath(t *testing.T) {
+	src := `
+lookup aws_ami as ubuntu {
+  most_recent = true
+  owners      = ["099720109477"]
+}
+`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(prog.Statements))
+	}
+
+	block, ok := prog.Statements[0].(*Block)
+	if !ok {
+		t.Fatalf("expected *ast.Block, got %T", prog.Statements[0])
+	}
+	if block.Keyword != tokens.LOOKUP {
+		t.Errorf("Keyword = %q, want lookup", block.Keyword)
+	}
+	if len(block.Labels) != 1 || block.Labels[0].Name != "aws_ami" {
+		t.Fatalf("Labels = %+v, want [aws_ami]", block.Labels)
+	}
+	if block.Name == nil || block.Name.Name != "ubuntu" {
+		t.Fatalf("Name = %+v, want ubuntu", block.Name)
+	}
+	if len(block.Body.Statements) != 2 {
+		t.Fatalf("expected 2 attributes, got %d", len(block.Body.Statements))
+	}
+}
+
+func TestParseLookup_MissingNameIsAHardError(t *testing.T) {
+	src := `
+lookup aws_ami {
+  most_recent = true
+}
+`
+	prog, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for a lookup with no name")
+	}
+	if len(prog.Statements) != 0 {
+		t.Errorf("expected 0 statements after failed block, got %d", len(prog.Statements))
+	}
+}
+
+func TestParseLookup_MissingLabel(t *testing.T) {
+	src := `
+lookup as ubuntu {
+  most_recent = true
+}
+`
+	_, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for a lookup with no type label")
+	}
+}
+
+func TestParseLookup_EmptyBody(t *testing.T) {
+	src := `lookup aws_ami as ubuntu {}`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	if len(block.Body.Statements) != 0 {
+		t.Errorf("expected 0 attributes, got %d", len(block.Body.Statements))
+	}
+}
+
+func TestParseLookup_NestedObjectFilter(t *testing.T) {
+	src := `
+lookup aws_ami as ubuntu {
+  filter = {
+    name   = "name"
+    values = ["ubuntu-*"]
+  }
+}
+`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[0].(*Attribute)
+	obj, ok := attr.Value.(*ObjectExpr)
+	if !ok || len(obj.Fields) != 2 {
+		t.Fatalf("attr.Value = %+v, want 2-field ObjectExpr", attr.Value)
+	}
+}
+
+func TestParseLookup_ProviderMetaAttribute(t *testing.T) {
+	src := `
+lookup aws_ami as ubuntu {
+  most_recent = true
+  provider    = aws.east
+}
+`
+	prog, reporter := parse(t, src)
+	if reporter.HasErrors() {
+		t.Fatalf("unexpected errors: %+v", reporter.Diagnostics())
+	}
+	block := prog.Statements[0].(*Block)
+	attr := block.Body.Statements[1].(*Attribute)
+	if attr.Name.Name != "provider" {
+		t.Fatalf("attr.Name = %q, want provider", attr.Name.Name)
+	}
+	if _, ok := attr.Value.(*MemberExpr); !ok {
+		t.Errorf("attr.Value type = %T, want *ast.MemberExpr", attr.Value)
+	}
+}
+
+func TestParseLookup_UnclosedBlock(t *testing.T) {
+	src := `
+lookup aws_ami as ubuntu {
+  most_recent = true
+`
+	_, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error for an unclosed block")
+	}
+}
+
+func TestParseProgram_RecoversAcrossAllThreeKeywords(t *testing.T) {
+	// Confirms synchronize()'s stop-set includes LOOKUP alongside
+	// PROVIDER/RESOURCE — a broken lookup shouldn't swallow a valid
+	// resource block that follows it.
+	src := `
+lookup aws_ami {
+  most_recent = true
+}
+
+resource aws_instance as app_server {
+  ami = "ami-123"
+}
+`
+	prog, reporter := parse(t, src)
+	if !reporter.HasErrors() {
+		t.Fatal("expected an error from the broken lookup block")
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 recovered statement, got %d", len(prog.Statements))
+	}
+	block := prog.Statements[0].(*Block)
+	if block.Keyword != tokens.RESOURCE || block.Name.Name != "app_server" {
+		t.Errorf("recovered block is wrong: %+v", block)
+	}
+}
