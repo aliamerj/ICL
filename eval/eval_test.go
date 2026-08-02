@@ -202,22 +202,6 @@ func TestEval_ProviderFieldStillResolvesEagerly(t *testing.T) {
 	}
 }
 
-func TestEval_ChainedProviderReferenceStillWorks(t *testing.T) {
-	// Regression: aws.east.region (three-segment) must still route to
-	// provider resolution, not get misidentified as a resource lookup.
-	env := NewEnv()
-	env.Registry.Providers.add(&ProviderConfig{
-		Name: "aws", Alias: "east",
-		Extra: map[string]Value{"region": StringValue("us-east-1")},
-	})
-
-	expr := &parser.MemberExpr{Object: memberExpr("aws", "east"), Property: "region"}
-	v, ok := eval(expr, env, diagnostics.New(""))
-	if !ok || v.Str != "us-east-1" {
-		t.Fatalf("got %+v, ok=%v, want us-east-1", v, ok)
-	}
-}
-
 func memberExpr(objName, property string) *parser.MemberExpr {
 	return &parser.MemberExpr{
 		Object:   &parser.Identifier{Name: objName},

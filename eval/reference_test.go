@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aliamerj/icl/diagnostics"
@@ -132,6 +133,236 @@ func TestParseExpression_IndexAfterMember(t *testing.T) {
 	member, ok := idx.Object.(*parser.MemberExpr)
 	if !ok || member.Property != "tags" {
 		t.Fatalf("Object = %+v, want MemberExpr(tags)", idx.Object)
+	}
+}
+
+func TestEval_VarListDynamicIndexFromAnotherVar(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	idxDecl := parseSingleVarDecl(t, `var idx is number = 0`)
+	evalVar(idxDecl, env, reporter)
+
+	bucketDecl := parseSingleVarDecl(t, `var curr_bucket = { tags = ["prod", "local"] }`)
+	evalVar(bucketDecl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("curr_bucket", "tags"),
+		Index:  &parser.Identifier{Name: "idx"},
+	}
+	v, ok := eval(expr, env, reporter)
+	if !ok {
+		t.Fatalf("expected success, got: %+v", reporter.Diagnostics())
+	}
+	if v.Kind != KindRef || v.Str != "var.curr_bucket.tags[var.idx]" {
+		t.Errorf("got %+v, want KindRef var.curr_bucket.tags[var.idx]", v)
+	}
+}
+
+func TestEval_VarListDynamicIndexFromResourceAttr(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	resBlock := parseBlock(t, `resource aws_instance as app { ami = "ami-1" }`)
+	evalResource(resBlock, env, reporter)
+
+	bucketDecl := parseSingleVarDecl(t, `var curr_bucket = { tags = ["prod", "local"] }`)
+	evalVar(bucketDecl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("curr_bucket", "tags"),
+		Index:  memberExpr("app", "count"),
+	}
+	v, ok := eval(expr, env, reporter)
+	if !ok {
+		t.Fatalf("expected success, got: %+v", reporter.Diagnostics())
+	}
+	if v.Str != "var.curr_bucket.tags[aws_instance.app.count]" {
+		t.Errorf("got %q", v.Str)
+	}
+}
+
+func TestEval_DynamicIndexOnNonListStillFails(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	idxDecl := parseSingleVarDecl(t, `var idx is number = 0`)
+	evalVar(idxDecl, env, reporter)
+	nameDecl := parseSingleVarDecl(t, `var curr_bucket = { name = "x" }`)
+	evalVar(nameDecl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("curr_bucket", "name"), // string, not a list
+		Index:  &parser.Identifier{Name: "idx"},
+	}
+	_, ok := eval(expr, env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected an error: cannot dynamically index a non-list field")
+	}
+}
+
+func TestEval_ConstantArithmeticIndexStillWorks(t *testing.T) {
+	// Regression: 0+1 folds to a plain KindInt via existing arithmetic
+	// eval — must still take the segIndexConst path, not dynamic.
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	decl := parseSingleVarDecl(t, `var curr_bucket = { tags = ["a", "b", "c"] }`)
+	evalVar(decl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("curr_bucket", "tags"),
+		Index:  &parser.BinaryExpr{Left: &parser.IntLiteral{Value: 0}, Operator: "+", Right: &parser.IntLiteral{Value: 1}},
+	}
+	v, ok := eval(expr, env, reporter)
+	if !ok || v.Str != "var.curr_bucket.tags[1]" {
+		t.Fatalf("got %+v, ok=%v, want tags[1] (constant-folded)", v, ok)
+	}
+}
+
+func TestEval_StringIndexStillRejected(t *testing.T) {
+	env := NewEnv()
+	reporter := diagnostics.New("")
+
+	decl := parseSingleVarDecl(t, `var curr_bucket = { tags = ["a", "b"] }`)
+	evalVar(decl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("curr_bucket", "tags"),
+		Index:  &parser.StringLiteral{Value: "0"},
+	}
+	_, ok := eval(expr, env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected an error for a string index")
+	}
+}
+
+func TestEval_ProviderConstIndexResolvesEagerly(t *testing.T) {
+	env := NewEnv()
+	env.Registry.Providers.add(&ProviderConfig{Name: "aws", Extra: map[string]Value{
+		"allowed_account_ids": ListValue([]Value{StringValue("111"), StringValue("222")}),
+	}})
+	reporter := diagnostics.New("")
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("aws", "allowed_account_ids"),
+		Index:  &parser.IntLiteral{Value: 1},
+	}
+	v, ok := eval(expr, env, reporter)
+	if !ok {
+		t.Fatalf("expected success, got: %+v", reporter.Diagnostics())
+	}
+	if v.Kind != KindString || v.Str != "222" {
+		t.Fatalf("got %+v, want literal string 222 (NOT a RefValue)", v)
+	}
+}
+
+func TestEval_ProviderNestedFieldEagerly(t *testing.T) {
+	env := NewEnv()
+	env.Registry.Providers.add(&ProviderConfig{Name: "aws", Extra: map[string]Value{
+		"assume_role": ObjectValue(map[string]Value{"role_arn": StringValue("arn:aws:iam::123:role/deploy")}),
+	}})
+	reporter := diagnostics.New("")
+
+	expr := &parser.MemberExpr{Object: memberExpr("aws", "assume_role"), Property: "role_arn"}
+	v, ok := eval(expr, env, reporter)
+	if !ok || v.Kind != KindString || v.Str != "arn:aws:iam::123:role/deploy" {
+		t.Fatalf("got %+v, ok=%v", v, ok)
+	}
+}
+
+func TestEval_ProviderDynamicIndexRejected(t *testing.T) {
+	env := NewEnv()
+
+	env.Registry.Providers.add(&ProviderConfig{Name: "aws", Extra: map[string]Value{
+		"allowed_account_ids": ListValue([]Value{StringValue("111")}),
+	}})
+	reporter := diagnostics.New("")
+
+	idxDecl := parseSingleVarDecl(t, `var idx is number = 0`)
+	evalVar(idxDecl, env, reporter)
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("aws", "allowed_account_ids"),
+		Index:  &parser.Identifier{Name: "idx"},
+	}
+	_, ok := eval(expr, env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected an error: dynamic index into a provider field must be rejected")
+	}
+}
+
+func TestEval_ProviderIndexOutOfRangeStillCaught(t *testing.T) {
+	env := NewEnv()
+
+	env.Registry.Providers.add(&ProviderConfig{Name: "aws", Extra: map[string]Value{
+		"allowed_account_ids": ListValue([]Value{StringValue("111")}),
+	}})
+	reporter := diagnostics.New("")
+
+	expr := &parser.IndexExpr{
+		Object: memberExpr("aws", "allowed_account_ids"),
+		Index:  &parser.IntLiteral{Value: 5},
+	}
+	_, ok := eval(expr, env, reporter)
+	if ok || !reporter.HasErrors() {
+		t.Fatal("expected index-out-of-range error")
+	}
+}
+
+func TestEval_UndefinedReferenceHintsAtForwardDeclaration(t *testing.T) {
+	env := NewEnv()
+	env.SetForwardLookup(func(name string) (string, bool) {
+		if name == "curr_bucket_name" {
+			return "var", true
+		}
+		return "", false
+	})
+	reporter := diagnostics.New("")
+
+	_, ok := eval(&parser.Identifier{Name: "curr_bucket_name"}, env, reporter)
+	if ok {
+		t.Fatal("expected failure — reference is still unresolved, hint doesn't change that")
+	}
+	diags := reporter.Diagnostics()
+	if len(diags) == 0 || !strings.Contains(diags[0].Help, "declared later") {
+		t.Fatalf("expected a forward-declaration hint, got: %+v", diags)
+	}
+}
+
+func TestEval_UndefinedReferenceNoHintWhenTrulyUndefined(t *testing.T) {
+	env := NewEnv()
+	env.SetForwardLookup(func(name string) (string, bool) { return "", false })
+	reporter := diagnostics.New("")
+
+	_, ok := eval(&parser.Identifier{Name: "totally_made_up"}, env, reporter)
+	if ok {
+		t.Fatal("expected failure")
+	}
+	diags := reporter.Diagnostics()
+	if len(diags) == 0 || strings.Contains(diags[0].Help, "declared later") {
+		t.Fatalf("should NOT get a forward-declaration hint for a name that doesn't exist at all: %+v", diags)
+	}
+}
+
+func TestEvalReferenceChain_UndefinedReferenceHintsAtForwardDeclaration(t *testing.T) {
+	env := NewEnv()
+	env.SetForwardLookup(func(name string) (string, bool) {
+		if name == "demo_vpc" {
+			return "resource", true
+		}
+		return "", false
+	})
+	reporter := diagnostics.New("")
+
+	expr := &parser.MemberExpr{Object: &parser.Identifier{Name: "demo_vpc"}, Property: "id"}
+	_, ok := eval(expr, env, reporter)
+	if ok {
+		t.Fatal("expected failure — hint doesn't make it resolve")
+	}
+	diags := reporter.Diagnostics()
+	if len(diags) == 0 || !strings.Contains(diags[0].Help, "declared later") {
+		t.Fatalf("expected a forward-declaration hint, got: %+v", diags)
 	}
 }
 

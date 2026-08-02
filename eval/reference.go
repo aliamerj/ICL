@@ -9,10 +9,19 @@ import (
 	"github.com/aliamerj/icl/parser"
 )
 
+type segKind int
+
+const (
+	segField segKind = iota
+	segIndexConst
+	segIndexDynamic
+)
+
 type pathSegment struct {
-	isIndex bool
-	name    string // field name, if !isIndex
-	index   int64  // index value, if isIndex
+	kind        segKind
+	name        string // segField
+	index       int64  // segIndexConst
+	dynamicAddr string // segIndexDynamic — raw terraform address text, e.g. "var.some_var"
 }
 
 func evalReferenceChain(expr parser.Expression, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
@@ -23,7 +32,6 @@ func evalReferenceChain(expr parser.Expression, env *Environment, reporter *diag
 			"unrecognized reference shape", "")
 		return Value{}, false
 	}
-
 	if resCfg, found := registry.Resources.lookup(root); found {
 		prefix := resCfg.Type + "." + resCfg.Name
 		if resCfg.Kind == KindLookup {
@@ -31,35 +39,123 @@ func evalReferenceChain(expr parser.Expression, env *Environment, reporter *diag
 		}
 		return RefValue(prefix + joinSegments(segs)), true
 	}
-
 	if varCfg, found := registry.Vars.lookup(root); found {
 		if !validateVarPath(varCfg, segs, expr, reporter) {
 			return Value{}, false
 		}
 		return RefValue("var." + root + joinSegments(segs)), true
 	}
+	if instances := registry.Providers.instancesOf(root); len(instances) > 0 {
+		return resolveProviderChain(root, instances, segs, expr, reporter)
+	}
 
-	if len(registry.Providers.instancesOf(root)) > 0 {
-		// index support on provider fields not implemented yet — flagged below
-		if segs[0].isIndex {
-			reporter.ErrorAtOffsetWithCode(expr.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
-				"indexing directly into a provider is not supported", "")
+	help := ""
+	if env.forwardLookup != nil {
+		if kind, found := env.forwardLookup(root); found {
+			help = fmt.Sprintf("%q is declared later in this file (as %s) — move it earlier, or declare it before this reference", root, kind)
+		}
+	}
+	reporter.ErrorAtOffsetWithCode(expr.Range().Start.Offset, diagnostics.UNDEFINED_REFERENCE,
+		fmt.Sprintf("undefined reference %q — no resource, lookup, var, or provider with that name", root), help)
+	return Value{}, false
+}
+
+// resolveProviderChain fully resolves a provider reference to a concrete
+// literal Value — never RefValue. Provider config isn't Terraform-addressable
+// (there's no `${aws.field}` in real HCL), so unlike resource/lookup/var
+// references, this MUST be resolved now, not deferred.
+func resolveProviderChain(root string, instances []*ProviderConfig, segs []pathSegment, node parser.Expression, reporter *diagnostics.Reporter) (Value, bool) {
+	alias := ""
+	fieldStart := 0
+
+	if len(instances) > 1 {
+		// multiple configs exist -> alias is mandatory, first segment must select it
+		if segs[0].kind != segField {
+			reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.AMBIGUOUS_PROVIDER_REF,
+				fmt.Sprintf("%q has multiple configurations, an alias is required", root), "")
 			return Value{}, false
 		}
-		if len(segs) == 1 {
-			return resolveProviderField(root, "", segs[0].name, expr, env, reporter)
-		}
-		if len(segs) == 2 && !segs[1].isIndex {
-			return resolveProviderField(root, segs[0].name, segs[1].name, expr, env, reporter)
-		}
-		reporter.ErrorAtOffsetWithCode(expr.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
-			fmt.Sprintf("too many segments in provider reference %q", root), "")
+		alias = segs[0].name
+		fieldStart = 1
+	} else {
+		alias = instances[0].Alias
+	}
+
+	if fieldStart >= len(segs) || segs[fieldStart].kind != segField {
+		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_REFERENCE,
+			fmt.Sprintf("expected a field name after %q", displayRef(root, alias)), "")
+		return Value{}, false
+	}
+	fieldName := segs[fieldStart].name
+
+	cfg, found := lookupProvider(instances, alias)
+	if !found {
+		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_PROVIDER,
+			fmt.Sprintf("no provider configuration matches %q", displayRef(root, alias)), "")
+		return Value{}, false
+	}
+	val, ok := cfg.Extra[fieldName]
+	if !ok {
+		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_FIELD,
+			fmt.Sprintf("provider %q has no field %q", displayRef(root, alias), fieldName),
+			fmt.Sprintf("available fields: %s", strings.Join(fieldNames(cfg.Extra), ", ")))
 		return Value{}, false
 	}
 
-	reporter.ErrorAtOffsetWithCode(expr.Range().Start.Offset, diagnostics.UNDEFINED_REFERENCE,
-		fmt.Sprintf("undefined reference %q — no resource, lookup, var, or provider with that name", root), "")
-	return Value{}, false
+	// walk any remaining segments (nested field access, list indexing)
+	// eagerly against the now-known concrete value
+	pathSoFar := fmt.Sprintf("%s.%s", displayRef(root, alias), fieldName)
+	current := val
+	for _, seg := range segs[fieldStart+1:] {
+		switch seg.kind {
+		case segField:
+			if current.Kind != KindObject {
+				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_FIELD_ACCESS,
+					fmt.Sprintf("cannot access field %q — %q is a %s, not an object", seg.name, pathSoFar, current.Kind), "")
+				return Value{}, false
+			}
+			next, ok := current.Object[seg.name]
+			if !ok {
+				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_FIELD,
+					fmt.Sprintf("%q has no field %q", pathSoFar, seg.name), "")
+				return Value{}, false
+			}
+			current = next
+			pathSoFar += "." + seg.name
+		case segIndexConst:
+			if current.Kind != KindList {
+				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_INDEX,
+					fmt.Sprintf("cannot index %q — it is a %s, not a list", pathSoFar, current.Kind), "")
+				return Value{}, false
+			}
+			if seg.index < 0 || int(seg.index) >= len(current.List) {
+				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INDEX_OUT_OF_RANGE,
+					fmt.Sprintf("index %d out of range for %q (length %d)", seg.index, pathSoFar, len(current.List)), "")
+				return Value{}, false
+			}
+			current = current.List[seg.index]
+			pathSoFar = fmt.Sprintf("%s[%d]", pathSoFar, seg.index)
+		case segIndexDynamic:
+			// Genuinely unsupportable, not just unimplemented: provider
+			// config is inlined as a literal in the compiled JSON, with
+			// no Terraform-side address to defer to — there's no such
+			// thing as "${aws.field[var.idx]}" in real HCL.
+			reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_INDEX,
+				fmt.Sprintf("cannot use a dynamic index on %q — provider values must be indexed with a constant, since they're resolved at compile time, not by Terraform", pathSoFar),
+				"")
+			return Value{}, false
+		}
+	}
+	return current, true
+}
+
+func lookupProvider(instances []*ProviderConfig, alias string) (*ProviderConfig, bool) {
+	for _, inst := range instances {
+		if inst.Alias == alias {
+			return inst, true
+		}
+	}
+	return nil, false
 }
 
 func flattenChain(expr parser.Expression, env *Environment, reporter *diagnostics.Reporter) (root string, segs []pathSegment, ok bool) {
@@ -81,12 +177,19 @@ func flattenChain(expr parser.Expression, env *Environment, reporter *diagnostic
 		if !ok {
 			return "", nil, false
 		}
-		if idxVal.Kind != KindInt {
+		switch idxVal.Kind {
+		case KindInt:
+			return r, append(s, pathSegment{kind: segIndexConst, index: idxVal.Int}), true
+		case KindRef:
+			return r, append(s, pathSegment{kind: segIndexDynamic, dynamicAddr: idxVal.Str}), true
+
+		default:
 			reporter.ErrorAtOffsetWithCode(e.Index.Range().Start.Offset, diagnostics.INVALID_INDEX,
-				"index must be a constant integer", "")
+				fmt.Sprintf("index must be a constant integer or a reference, got %s", idxVal.Kind),
+				"string/bool literal indices aren't supported")
 			return "", nil, false
 		}
-		return r, append(s, pathSegment{isIndex: true, index: idxVal.Int}), true
+
 	default:
 		return "", nil, false
 	}
@@ -95,11 +198,14 @@ func flattenChain(expr parser.Expression, env *Environment, reporter *diagnostic
 func joinSegments(segs []pathSegment) string {
 	var b strings.Builder
 	for _, s := range segs {
-		if s.isIndex {
-			fmt.Fprintf(&b, "[%d]", s.index)
-		} else {
+		switch s.kind {
+		case segField:
 			b.WriteString(".")
 			b.WriteString(s.name)
+		case segIndexConst:
+			fmt.Fprintf(&b, "[%d]", s.index)
+		case segIndexDynamic:
+			fmt.Fprintf(&b, "[%s]", s.dynamicAddr)
 		}
 	}
 	return b.String()
@@ -113,7 +219,8 @@ func validateVarPath(varCfg *VarConfig, segs []pathSegment, node parser.Expressi
 	pathSoFar := varCfg.Name
 
 	for _, seg := range segs {
-		if seg.isIndex {
+		switch seg.kind {
+		case segIndexConst:
 			if current.Kind != KindList {
 				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_INDEX,
 					fmt.Sprintf("cannot index %q — it is a %s, not a list", pathSoFar, current.Kind), "")
@@ -126,7 +233,16 @@ func validateVarPath(varCfg *VarConfig, segs []pathSegment, node parser.Expressi
 			}
 			current = current.List[seg.index]
 			pathSoFar = fmt.Sprintf("%s[%d]", pathSoFar, seg.index)
-		} else {
+
+		case segIndexDynamic:
+			if current.Kind != KindList {
+				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_INDEX,
+					fmt.Sprintf("cannot index %q — it is a %s, not a list", pathSoFar, current.Kind), "")
+				return false
+			}
+			return true // can't validate further — the actual index isn't known until apply time
+
+		case segField:
 			if current.Kind != KindObject {
 				reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.INVALID_FIELD_ACCESS,
 					fmt.Sprintf("cannot access field %q — %q is a %s, not an object", seg.name, pathSoFar, current.Kind), "")
@@ -145,47 +261,6 @@ func validateVarPath(varCfg *VarConfig, segs []pathSegment, node parser.Expressi
 	return true
 }
 
-func resolveProviderField(name, alias, field string, node parser.Expression, env *Environment, reporter *diagnostics.Reporter) (Value, bool) {
-	if env.Registry.Providers == nil {
-		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_PROVIDER,
-			fmt.Sprintf("no provider configuration matches %q", displayRef(name, alias)), "")
-		return Value{}, false
-	}
-
-	// If no alias was given but the type has multiple declared instances,
-	// this is genuinely ambiguous — tell the user exactly which aliases exist.
-	if alias == "" {
-		instances := env.Registry.Providers.instancesOf(name)
-		if len(instances) > 1 {
-			var aliases []string
-			for _, inst := range instances {
-				if inst.Alias != "" {
-					aliases = append(aliases, inst.Alias)
-				}
-			}
-			reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.AMBIGUOUS_PROVIDER_REF,
-				fmt.Sprintf("%q has multiple configurations, reference is ambiguous", name),
-				fmt.Sprintf("use one of: %s", strings.Join(qualifiedNames(name, aliases), ", ")))
-			return Value{}, false
-		}
-	}
-	cfg, found := env.Registry.Providers.lookup(name, alias)
-	if !found {
-		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_PROVIDER,
-			fmt.Sprintf("no provider configuration matches %q", displayRef(name, alias)), "")
-		return Value{}, false
-	}
-	val, ok := cfg.Extra[field]
-	if !ok {
-		reporter.ErrorAtOffsetWithCode(node.Range().Start.Offset, diagnostics.UNDEFINED_FIELD,
-			fmt.Sprintf("provider %q has no field %q", displayRef(name, alias), field),
-			fmt.Sprintf("available fields: %s", strings.Join(fieldNames(cfg.Extra), ", ")))
-		return Value{}, false
-	}
-	return val, true
-
-}
-
 func fieldNames(extra map[string]Value) []string {
 	names := make([]string, 0, len(extra))
 	for k := range extra {
@@ -193,12 +268,4 @@ func fieldNames(extra map[string]Value) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-func qualifiedNames(typ string, aliases []string) []string {
-	out := make([]string, len(aliases))
-	for i, a := range aliases {
-		out[i] = typ + "." + a
-	}
-	return out
 }

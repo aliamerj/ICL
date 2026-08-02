@@ -6,9 +6,10 @@ package eval
 // the same Registry — a for-loop shouldn't spawn its own copy of every
 // provider/resource in the file, it just needs its own loop variable.
 type Environment struct {
-	Parent   *Environment
-	Values   map[string]Value
-	Registry *Registry
+	Parent        *Environment
+	Values        map[string]Value
+	Registry      *Registry
+	forwardLookup func(name string) (kind string, found bool)
 }
 
 func NewEnv() *Environment {
@@ -47,4 +48,8 @@ func (e *Environment) get(name string) (Value, bool) {
 
 func (e *Environment) set(name string, v Value) {
 	e.Values[name] = v
+}
+
+func (e *Environment) SetForwardLookup(fn func(name string) (string, bool)) {
+	e.forwardLookup = fn
 }
