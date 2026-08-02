@@ -31,4 +31,6 @@ const (
 	AMBIGUOUS_PROVIDER_REF errorCode = "E0214"
 	INVALID_RESOURCE_BLOCK errorCode = "E0215"
 	DUPLICATE_NAME         errorCode = "E0216"
+	INVALID_INDEX          errorCode = "E0217"
+	INDEX_OUT_OF_RANGE     errorCode = "E0218"
 )

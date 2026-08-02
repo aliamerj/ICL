@@ -220,20 +220,42 @@ func (p *parser) parseObjectLiteral() Expression {
 }
 
 func (p *parser) parsePostfix(base Expression) Expression {
-	for p.cur().Type == tokens.DOT {
-		p.advance()
-		propTok, ok := p.expect(tokens.IDENTIFIER)
-		if !ok {
-			return nil
-		}
-		base = &MemberExpr{
-			Object:   base,
-			Property: propTok.Lexeme,
-			Rng: rangePos{
-				Start: base.Range().Start,
-				End:   rangeOf(propTok).End,
-			},
+	for {
+		switch p.cur().Type {
+		case tokens.DOT:
+			p.advance()
+			propTok, ok := p.expect(tokens.IDENTIFIER)
+			if !ok {
+				return nil
+			}
+			base = &MemberExpr{
+				Object:   base,
+				Property: propTok.Lexeme,
+				Rng: rangePos{
+					Start: base.Range().Start,
+					End:   rangeOf(propTok).End,
+				},
+			}
+		case tokens.LEFT_BRACKET:
+			p.advance()
+			idx := p.parseExpression()
+			if idx == nil {
+				return nil
+			}
+			endTok, ok := p.expect(tokens.RIGHT_BRACKET)
+			if !ok {
+				return nil
+			}
+			base = &IndexExpr{
+				Object: base,
+				Index:  idx,
+				Rng: rangePos{
+					Start: base.Range().Start,
+					End:   rangeOf(endTok).End,
+				},
+			}
+		default:
+			return base
 		}
 	}
-	return base
 }

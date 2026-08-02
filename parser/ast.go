@@ -168,3 +168,12 @@ type VarDecl struct {
 
 func (v *VarDecl) statementNode()  {}
 func (v *VarDecl) Range() rangePos { return v.Rng }
+
+type IndexExpr struct {
+	Object Expression
+	Index  Expression // usually an IntLiteral, but any expression is allowed syntactically
+	Rng    rangePos
+}
+
+func (i *IndexExpr) expressionNode() {}
+func (i *IndexExpr) Range() rangePos { return i.Rng }
