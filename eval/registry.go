@@ -6,5 +6,6 @@ package eval
 type Registry struct {
 	Providers *providerRegistry
 	Resources *resourceRegistry // added when `resource` is built
-	Vars       *varRegistry
+	Vars      *varRegistry
+	Outputs   *outputRegistry
 }

@@ -44,6 +44,7 @@ const (
   LOOKUP
   VAR
   IS
+  OUTPUT
 
 	EOF
 )

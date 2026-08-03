@@ -177,3 +177,13 @@ type IndexExpr struct {
 
 func (i *IndexExpr) expressionNode() {}
 func (i *IndexExpr) Range() rangePos { return i.Rng }
+
+type OutputDecl struct {
+	Name  *Identifier
+	Value Expression // shorthand form only, nil if body form used
+	Body  *Body      // body form only, nil if shorthand used
+	Rng   rangePos
+}
+
+func (o *OutputDecl) statementNode()  {}
+func (o *OutputDecl) Range() rangePos { return o.Rng }

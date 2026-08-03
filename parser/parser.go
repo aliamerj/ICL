@@ -36,6 +36,12 @@ func (p *parser) ParseProgram() *Program {
 			} else {
 				p.synchronize()
 			}
+		case tokens.OUTPUT:
+			if output := p.parseOutputDecl(); output != nil {
+				prog.Statements = append(prog.Statements, output)
+			} else {
+				p.synchronize()
+			}
 		default:
 			p.reporter.ErrorAtOffsetWithCode(
 				p.cur().Offset,
@@ -52,15 +58,13 @@ func (p *parser) ParseProgram() *Program {
 }
 
 func (p *parser) synchronize() {
-	p.advance()
-
 	for p.cur().Type != tokens.EOF {
 		if p.cur().Type == tokens.RIGHT_BRACE {
 			p.advance()
 			return
 		}
 		switch p.cur().Type {
-		case tokens.PROVIDER, tokens.RESOURCE:
+		case tokens.PROVIDER, tokens.RESOURCE, tokens.LOOKUP, tokens.VAR, tokens.OUTPUT:
 			return
 		}
 		p.advance()

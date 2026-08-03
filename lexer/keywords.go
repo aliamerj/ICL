@@ -9,4 +9,5 @@ var keywords = map[string]tokens.Type{
 	"lookup":   tokens.LOOKUP,
 	"is":       tokens.IS,
 	"var":      tokens.VAR,
+	"output":   tokens.OUTPUT,
 }

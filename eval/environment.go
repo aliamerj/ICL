@@ -25,6 +25,9 @@ func NewEnv() *Environment {
 			Vars: &varRegistry{
 				Instances: make(map[string]*VarConfig),
 			},
+			Outputs: &outputRegistry{
+				Instances: make(map[string]*OutputConfig),
+			},
 		},
 	}
 }

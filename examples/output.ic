@@ -1,0 +1,11 @@
+resource aws_s3_bucket as my_bucket {
+  bucket = "my-app-bucket"
+}
+
+output bucket_id = my_bucket.id
+
+output bucket_arn {
+  value       = my_bucket.id
+  description = "The bucket's identifier"
+  sensitive   = false
+}

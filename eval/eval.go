@@ -20,6 +20,8 @@ func Run(env *Environment, prog *parser.Program, reporter *diagnostics.Reporter)
 			}
 		case *parser.VarDecl:
 			evalVar(s, env, reporter)
+		case *parser.OutputDecl:
+			evalOutput(s, env, reporter)
 		}
 	}
 }

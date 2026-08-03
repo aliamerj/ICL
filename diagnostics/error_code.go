@@ -33,4 +33,6 @@ const (
 	DUPLICATE_NAME         errorCode = "E0216"
 	INVALID_INDEX          errorCode = "E0217"
 	INDEX_OUT_OF_RANGE     errorCode = "E0218"
+	MISSING_OUTPUT_VALUE   errorCode = "E0220"
+	UNKNOWN_ATTRIBUTE      errorCode = "E0221"
 )

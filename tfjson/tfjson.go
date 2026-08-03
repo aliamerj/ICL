@@ -15,6 +15,7 @@ type Document struct {
 	Resource  map[string]map[string]any `json:"resource,omitempty"`
 	Data      map[string]map[string]any `json:"data,omitempty"`
 	Variable  map[string]any            `json:"variable,omitempty"`
+	Output    map[string]any            `json:"output,omitempty"`
 }
 
 type TerraformBlock struct {
@@ -45,6 +46,7 @@ func Marshal(env *eval.Environment) ([]byte, error) {
 	}
 	buildResources(doc, env.Registry.Resources.Instances)
 	buildVars(doc, env.Registry.Vars.Instances)
+	buildOutputs(doc, env.Registry.Outputs.Instances)
 	return json.MarshalIndent(doc, "", "  ")
 }
 
@@ -62,6 +64,23 @@ func buildVars(doc *Document, vars map[string]*eval.VarConfig) {
 			entry["default"] = v.Default.Native()
 		}
 		doc.Variable[v.Name] = entry
+	}
+}
+
+func buildOutputs(doc *Document, outputs map[string]*eval.OutputConfig) {
+	if len(outputs) == 0 {
+		return
+	}
+	doc.Output = map[string]any{}
+	for _, o := range outputs {
+		entry := map[string]any{"value": o.Value.Native()}
+		if o.Description != "" {
+			entry["description"] = o.Description
+		}
+		if o.Sensitive {
+			entry["sensitive"] = true
+		}
+		doc.Output[o.Name] = entry
 	}
 }
 
